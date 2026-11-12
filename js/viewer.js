@@ -61,7 +61,7 @@
             var navContainer = document.getElementById('navLinksContainer');
             var navIndicator = document.getElementById('navIndicator');
             var navLinks = document.querySelectorAll('.nav-links a');
-            var spySectionIds = ['top', 'relay', 'telemetri', 'hardware', 'aws'];
+            var spySectionIds = ['top', 'telemetri', 'hardware', 'aws'];
             var isUserNavClick = false;
             var navClickTimer = null;
             var currentNavSection = 'top';
