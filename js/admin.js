@@ -133,55 +133,19 @@
                 });
             }, 1000);
 
-            // Scrollspy for navigation links
-            var navLinks = document.querySelectorAll('.nav-links a');
-            var spySections = [
-                { id: 'top', link: navLinks[0] },
-                { id: 'relay', link: navLinks[1] },
-                { id: 'telemetri', link: navLinks[2] },
-                { id: 'hardware', link: navLinks[3] },
-                { id: 'aws', link: navLinks[4] }
-            ];
-
-            window.addEventListener('scroll', function() {
-                var topRow = document.querySelector('.top-row');
-                if (topRow) {
-                    if (window.scrollY > 15) {
-                        topRow.classList.add('scrolled');
-                    } else {
-                        topRow.classList.remove('scrolled');
-                    }
-                }
-                var pos = window.scrollY + 200;
-                var currentId = 'top';
-                spySections.forEach(function(sec) {
-                    var el = document.getElementById(sec.id);
-                    if (el && el.offsetTop <= pos) {
-                        currentId = sec.id;
-                    }
-                });
-                spySections.forEach(function(sec) {
-                    if (sec.link) {
-                        if (sec.id === currentId) {
-                            sec.link.classList.add('active');
-                        } else {
-                            sec.link.classList.remove('active');
-                        }
-                    }
-                });
-            });
-
-                        // Smooth Nav Indicator & Scrollspy Logic
+            // Unified Navigation Scrollspy & Sliding Indicator
             var navContainer = document.getElementById('navLinksContainer');
             var navIndicator = document.getElementById('navIndicator');
             var navLinks = document.querySelectorAll('.nav-links a');
-            var isUserClicking = false;
-            var clickTimer = null;
+            var spySectionIds = ['top', 'relay', 'telemetri', 'hardware', 'aws'];
+            var isUserNavClick = false;
+            var navClickTimer = null;
+            var currentNavSection = 'top';
 
             function moveNavIndicator(targetLink) {
                 if (!navIndicator || !navContainer) return;
                 var activeLink = targetLink || navContainer.querySelector('a.active') || navLinks[0];
-                if (activeLink) {
+                if (activeLink && activeLink.offsetParent !== null) {
                     var cRect = navContainer.getBoundingClientRect();
                     var lRect = activeLink.getBoundingClientRect();
                     navIndicator.style.left = (lRect.left - cRect.left) + 'px';
@@ -189,25 +153,61 @@
                 }
             }
 
+            function syncActiveSection(secId, shouldMoveIndicator) {
+                currentNavSection = secId;
+                var desktopLinks = document.querySelectorAll('.nav-links a');
+                var mobileLinks = document.querySelectorAll('.mobile-nav-link');
+                var targetDesktopLink = null;
+
+                desktopLinks.forEach(function(l) {
+                    if (l.getAttribute('href') === '#' + secId) {
+                        l.classList.add('active');
+                        targetDesktopLink = l;
+                    } else {
+                        l.classList.remove('active');
+                    }
+                });
+
+                mobileLinks.forEach(function(ml) {
+                    if (ml.getAttribute('href') === '#' + secId) {
+                        ml.classList.add('active');
+                    } else {
+                        ml.classList.remove('active');
+                    }
+                });
+
+                if (shouldMoveIndicator !== false && targetDesktopLink) {
+                    moveNavIndicator(targetDesktopLink);
+                }
+            }
+            window.syncActiveSection = syncActiveSection;
+            window.setNavClicking = function(state) {
+                isUserNavClick = state;
+            };
+
+            // Indicator initialization and resize handling
             window.addEventListener('load', function() { moveNavIndicator(); });
             window.addEventListener('resize', function() { moveNavIndicator(); });
             setTimeout(function() { moveNavIndicator(); }, 100);
             setTimeout(function() { moveNavIndicator(); }, 300);
+            setTimeout(function() { moveNavIndicator(); }, 600);
+            if (document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(function() { moveNavIndicator(); });
+            }
 
-            // Smooth scroll on click with indicator lock
+            // Desktop nav click handling
             navLinks.forEach(function(link) {
                 link.addEventListener('click', function(e) {
-                    var targetId = this.getAttribute('href');
-                    if (targetId && targetId.startsWith('#')) {
+                    var targetHref = this.getAttribute('href');
+                    if (targetHref && targetHref.startsWith('#')) {
                         e.preventDefault();
-                        var targetEl = document.getElementById(targetId.substring(1));
+                        var secId = targetHref.substring(1);
+                        var targetEl = document.getElementById(secId);
                         if (targetEl) {
-                            isUserClicking = true;
-                            clearTimeout(clickTimer);
+                            isUserNavClick = true;
+                            clearTimeout(navClickTimer);
 
-                            navLinks.forEach(function(l) { l.classList.remove('active'); });
-                            this.classList.add('active');
-                            moveNavIndicator(this);
+                            syncActiveSection(secId, true);
 
                             var topRow = document.querySelector('.top-row');
                             var navHeight = topRow ? topRow.offsetHeight + 24 : 86;
@@ -219,22 +219,15 @@
                                 behavior: 'smooth'
                             });
 
-                            clickTimer = setTimeout(function() {
-                                isUserClicking = false;
+                            navClickTimer = setTimeout(function() {
+                                isUserNavClick = false;
                             }, 850);
                         }
                     }
                 });
             });
 
-            var spySections = [
-                { id: 'top', link: navLinks[0] },
-                { id: 'relay', link: navLinks[1] },
-                { id: 'telemetri', link: navLinks[2] },
-                { id: 'hardware', link: navLinks[3] },
-                { id: 'aws', link: navLinks[4] }
-            ];
-
+            // Single unified scroll listener
             window.addEventListener('scroll', function() {
                 var topRow = document.querySelector('.top-row');
                 if (topRow) {
@@ -245,33 +238,42 @@
                     }
                 }
 
-                if (isUserClicking) return;
+                if (isUserNavClick) return;
 
                 var topRowHeight = topRow ? topRow.offsetHeight : 80;
-                var currentPos = window.pageYOffset + topRowHeight + 120;
+                var threshold = topRowHeight + 110;
                 var currentId = 'top';
 
-                spySections.forEach(function(sec) {
-                    var el = document.getElementById(sec.id);
-                    if (el) {
-                        var absTop = el.getBoundingClientRect().top + window.pageYOffset;
-                        if (absTop <= currentPos) {
-                            currentId = sec.id;
+                // Check if user scrolled to bottom of page (forcing AWS)
+                var scrollBottom = window.innerHeight + window.pageYOffset;
+                var docHeight = Math.max(
+                    document.body.scrollHeight,
+                    document.documentElement.scrollHeight,
+                    document.body.offsetHeight,
+                    document.documentElement.offsetHeight
+                );
+                var isAtBottom = scrollBottom >= (docHeight - 70);
+
+                if (isAtBottom) {
+                    currentId = 'aws';
+                } else if (window.pageYOffset < 60) {
+                    currentId = 'top';
+                } else {
+                    spySectionIds.forEach(function(id) {
+                        var el = document.getElementById(id);
+                        if (el) {
+                            var r = el.getBoundingClientRect();
+                            if (r.top <= threshold) {
+                                currentId = id;
+                            }
                         }
-                    }
-                });
+                    });
+                }
 
-                var activeLink = null;
-                spySections.forEach(function(sec) {
-                    if (sec.link && sec.id === currentId) {
-                        activeLink = sec.link;
-                    }
-                });
-
-                if (activeLink && !activeLink.classList.contains('active')) {
-                    navLinks.forEach(function(l) { l.classList.remove('active'); });
-                    activeLink.classList.add('active');
-                    moveNavIndicator(activeLink);
+                if (currentId !== currentNavSection) {
+                    syncActiveSection(currentId, true);
+                } else if (navIndicator && (!navIndicator.style.width || navIndicator.style.width === '0px')) {
+                    moveNavIndicator();
                 }
             }, { passive: true });
 
@@ -1251,19 +1253,16 @@
                             var secId = targetId.substring(1);
                             var targetEl = document.getElementById(secId);
 
-                            mobileNavLinks.forEach(function(l) { l.classList.remove('active'); });
-                            this.classList.add('active');
-
-                            navLinks.forEach(function(dl) {
-                                if (dl.getAttribute('href') === targetId) {
-                                    navLinks.forEach(function(l) { l.classList.remove('active'); });
-                                    dl.classList.add('active');
-                                }
-                            });
-
                             closeDropdown();
 
                             if (targetEl) {
+                                if (window.setNavClicking) {
+                                    window.setNavClicking(true);
+                                }
+                                if (window.syncActiveSection) {
+                                    window.syncActiveSection(secId, true);
+                                }
+
                                 var topRow = document.querySelector('.top-row');
                                 var navHeight = topRow ? topRow.offsetHeight + 16 : 76;
                                 var elementPosition = targetEl.getBoundingClientRect().top;
@@ -1275,26 +1274,14 @@
                                         behavior: 'smooth'
                                     });
                                 }, 100);
+
+                                setTimeout(function() {
+                                    if (window.setNavClicking) {
+                                        window.setNavClicking(false);
+                                    }
+                                }, 900);
                             }
                         }
                     });
                 });
-
-                // Synchronize scroll-spy with mobile dropdown links
-                window.addEventListener('scroll', function() {
-                    var currentPos = window.pageYOffset + 180;
-                    var spyIds = ['top', 'relay', 'telemetri', 'hardware', 'aws'];
-                    var curId = 'top';
-                    spyIds.forEach(function(id) {
-                        var el = document.getElementById(id);
-                        if (el) {
-                            var t = el.getBoundingClientRect().top + window.pageYOffset;
-                            if (t <= currentPos) curId = id;
-                        }
-                    });
-                    mobileNavLinks.forEach(function(ml) {
-                        if (ml.getAttribute('href') === '#' + curId) ml.classList.add('active');
-                        else ml.classList.remove('active');
-                    });
-                }, { passive: true });
             })();
