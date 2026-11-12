@@ -1,0 +1,1440 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hydroponic Dashboard - Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+    <style>
+        :root {
+            --g9: #1B5E20;
+            --g8: #2E7D32;
+            --g5: #66BB6A;
+            --g3: #A5D6A7;
+            --g1: #E8F5E9;
+            --mute: #4B7A4F;
+            --red: #BC2225;
+            --shadow: 0 4px 14px 0 rgba(27, 94, 32, .08)
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
+        }
+
+        body {
+            font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+            background: #fff;
+            color: var(--g9)
+        }
+
+        .container {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 20px 40px 60px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            position: relative
+        }
+
+        .card {
+            background: #fff;
+            border: 1px solid var(--g3);
+            border-radius: 10px;
+            box-shadow: var(--shadow)
+        }
+
+        .eyebrow {
+            color: var(--g5);
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: .8px;
+            text-transform: uppercase
+        }
+
+        svg {
+            flex-shrink: 0
+        }
+
+        /* nav */
+        .nav {
+            height: 62px;
+            border-radius: 999px;
+            background: var(--g9);
+            box-shadow: var(--shadow);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px 0 40px;
+            gap: 16px
+        }
+
+        .nav .logo {
+            width: 74px;
+            height: 41px
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 28px;
+            align-items: center
+        }
+
+        .nav-links a {
+            color: var(--g3);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 600;
+            padding: 7px 0 8px;
+            border-bottom: 2px solid transparent
+        }
+
+        .nav-links a.active {
+            color: #fff;
+            border-color: var(--g5)
+        }
+
+        .nav-user {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #fff;
+            font-size: 14px
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 12px
+        }
+
+        .gear {
+            width: 62px;
+            height: 62px;
+            border-radius: 50%;
+            background: var(--g9);
+            display: grid;
+            place-items: center;
+            flex-shrink: 0;
+            margin-right: -0px
+        }
+
+        .top-row {
+            display: flex;
+            align-items: center;
+            gap: 10px
+        }
+
+        .top-row .nav {
+            flex: 1
+        }
+
+        .leaf {
+            width: 54px;
+            height: 54px;
+            position: absolute;
+            left: 77px;
+            top: 28px;
+            pointer-events: none
+        }
+
+        /* hero */
+        .hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr);
+            gap: 24px;
+            padding: 28px 32px;
+            border-radius: 10px;
+            background: linear-gradient(94deg, #1B5E20 0%, #2E7D32 38.46%, #66BB6A 93.27%);
+            box-shadow: var(--shadow);
+            color: #fff
+        }
+
+        .hero h1 {
+            font-size: 30px;
+            font-weight: 800;
+            margin-top: 6px
+        }
+
+        .uptime {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            margin-top: 20px
+        }
+
+        .uptime b {
+            font-size: 36px;
+            font-weight: 800
+        }
+
+        .uptime span {
+            font-size: 20px;
+            font-weight: 600
+        }
+
+        .hw {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr)
+        }
+
+        .hw>div {
+            border-left: 1px solid rgba(165, 214, 167, .5);
+            padding: 4px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px
+        }
+
+        .hw .l {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            color: var(--g3);
+            font-size: 12px
+        }
+
+        .hw .v {
+            font-size: 16px;
+            font-weight: 700
+        }
+
+        .hw .s {
+            color: var(--g3);
+            font-size: 12px
+        }
+
+        /* weather */
+        .row2 {
+            display: flex;
+            gap: 24px
+        }
+
+        .weather {
+            flex: 1;
+            min-height: 240px;
+            padding: 24px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px
+        }
+
+        .weather .date {
+            color: var(--g5);
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 5px
+        }
+
+        .weather .temp {
+            font-size: 64px;
+            font-weight: 800;
+            line-height: 64px;
+            margin-top: 8px
+        }
+
+        .weather .desc {
+            color: var(--mute);
+            font-size: 13px;
+            margin-top: 3px
+        }
+
+        .wstats {
+            display: flex;
+            gap: 28px;
+            padding-top: 12px;
+            flex-wrap: wrap
+        }
+
+        .wstats>div {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-size: 16px;
+            font-weight: 700
+        }
+
+        .wstats small {
+            display: block;
+            color: var(--g5);
+            font-size: 12px;
+            font-weight: 700
+        }
+
+        .sensors {
+            flex: 1;
+            display: flex;
+            gap: 16px
+        }
+
+        .sensor {
+            flex: 1;
+            min-height: 240px;
+            padding: 20px 18px;
+            display: flex;
+            flex-direction: column
+        }
+
+        .sensor .big {
+            display: flex;
+            align-items: baseline;
+            gap: 4px;
+            margin-top: 6px
+        }
+
+        .sensor .big b {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -.5px;
+            line-height: 28px
+        }
+
+        .sensor .big span {
+            color: var(--g5);
+            font-size: 13px;
+            font-weight: 700
+        }
+
+        .sensor .lbl {
+            color: var(--g5);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: .8px;
+            text-transform: uppercase;
+            margin-top: 12px
+        }
+
+        .bar {
+            height: 7px;
+            background: var(--g1);
+            border-radius: 99px;
+            overflow: hidden;
+            margin-top: auto
+        }
+
+        .bar i {
+            display: block;
+            height: 100%;
+            background: var(--g5);
+            border-radius: 99px
+        }
+
+        .sensor .st {
+            color: var(--mute);
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 6px
+        }
+
+        .sensor .ic {
+            height: 32px;
+            display: flex;
+            align-items: center
+        }
+
+        /* row 3 */
+        .row3 {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 24px
+        }
+
+        .row3>.card {
+            min-height: 424px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column
+        }
+
+        .donut-wrap {
+            flex: 1;
+            display: grid;
+            place-items: center
+        }
+
+        .donut {
+            width: 190px;
+            height: 190px;
+            border-radius: 50%;
+            background: conic-gradient(var(--g5) 0 244.8deg, var(--g1) 244.8deg 360deg);
+            display: grid;
+            place-items: center
+        }
+
+        .donut>div {
+            width: 154px;
+            height: 154px;
+            border-radius: 50%;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center
+        }
+
+        .donut b {
+            font-size: 38px;
+            font-weight: 800
+        }
+
+        .donut span {
+            color: var(--mute);
+            font-size: 13px
+        }
+
+        .minmax {
+            display: flex;
+            justify-content: space-between;
+            color: var(--mute);
+            font-size: 13px
+        }
+
+        .thr {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            margin-top: 12px
+        }
+
+        .thr .h {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 6px
+        }
+
+        .thr .bar {
+            margin-top: 0
+        }
+
+        .sub {
+            color: var(--mute);
+            font-size: 13px;
+            margin-top: 6px
+        }
+
+        /* chart */
+        .chart {
+            padding: 20px 20px 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px
+        }
+
+        .chart-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px
+        }
+
+        .legend {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+            font-weight: 600
+        }
+
+        .legend span {
+            display: flex;
+            gap: 6px;
+            align-items: center
+        }
+
+        .legend i {
+            width: 14px;
+            height: 4px;
+            border-radius: 2px;
+            display: block
+        }
+
+        .tabs {
+            display: flex;
+            gap: 18px
+        }
+
+        .tabs button {
+            background: none;
+            border: 0;
+            border-bottom: 2px solid transparent;
+            padding: 5px 0 6px;
+            color: var(--g5);
+            font: 700 13px Inter, sans-serif;
+            cursor: pointer
+        }
+
+        .tabs button.on {
+            color: var(--g9);
+            border-color: var(--g9)
+        }
+
+        .right-ctl {
+            display: flex;
+            gap: 28px;
+            align-items: center;
+            flex-wrap: wrap
+        }
+
+        .chartbox {
+            display: grid;
+            grid-template-columns: 36px 1fr;
+            grid-template-rows: 260px 20px;
+            column-gap: 4px;
+            height: 300px
+        }
+
+        .yax {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            color: var(--g5);
+            font-size: 11px;
+            text-align: right;
+            padding-right: 6px
+        }
+
+        .chartbox svg.plot {
+            width: 100%;
+            height: 260px;
+            display: block
+        }
+
+        .xax {
+            grid-column: 2;
+            display: flex;
+            justify-content: space-between;
+            color: var(--g5);
+            font-size: 11px;
+            padding-top: 6px
+        }
+
+        /* tables */
+        .tcard {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px
+        }
+
+        .thead {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap
+        }
+
+        .thead h2 {
+            font-size: 22px;
+            font-weight: 700;
+            margin-top: 6px
+        }
+
+        .btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 2px solid var(--g5);
+            border-radius: 12px;
+            padding: 9.5px 20px;
+            background: #fff;
+            color: var(--g9);
+            font: 700 14px Inter, sans-serif;
+            cursor: pointer
+        }
+
+        .btn:hover {
+            background: var(--g1)
+        }
+
+        .scroll {
+            overflow-x: auto
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 720px
+        }
+
+        th {
+            color: var(--g5);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: .6px;
+            text-transform: uppercase;
+            text-align: left;
+            padding: 13px 16px 12px;
+            border-bottom: 2px solid var(--g3);
+            white-space: nowrap
+        }
+
+        td {
+            padding: 15px 16px;
+            font-size: 14px;
+            border-bottom: 1px solid var(--g1);
+            white-space: nowrap
+        }
+
+        td.st {
+            font-size: 13px;
+            font-weight: 700
+        }
+
+        td.warn {
+            color: var(--red)
+        }
+
+        .aws table th {
+            font-size: 11px;
+            letter-spacing: .8px;
+            padding: 13px 18px 12.5px;
+            border-bottom: 1px solid rgba(165, 214, 167, .5)
+        }
+
+        .aws td {
+            padding: 16.5px 18px;
+            font-size: 13px;
+            font-weight: 600;
+            border-bottom: 1px solid rgba(165, 214, 167, .25)
+        }
+
+        .aws td:first-child {
+            font-weight: 700
+        }
+
+        .aws td small {
+            color: var(--mute);
+            font-size: 12px;
+            font-weight: 500;
+            margin-left: 2px
+        }
+
+        /* hardware guide */
+        h2.sec {
+            font-size: 26px;
+            font-weight: 800;
+            padding-top: 16px
+        }
+
+        .hwcards {
+            display: flex;
+            gap: 16px
+        }
+
+        .hwc {
+            flex: 1;
+            min-height: 240px;
+            padding: 20px 20px 33px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px
+        }
+
+        .hwc img {
+            max-width: 100%;
+            object-fit: contain
+        }
+
+        .hwc h5 {
+            font-size: 16px;
+            font-weight: 800;
+            align-self: stretch
+        }
+
+        .hwc ul {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            align-self: stretch;
+            font-size: 12px;
+            color: var(--mute)
+        }
+
+        .hwc li b {
+            color: var(--g9)
+        }
+
+        /* AWS */
+        .awsbar {
+            padding: 28px 32px;
+            border-radius: 18px;
+            background: linear-gradient(94deg, #1B5E20 0%, #2E7D32 60%, #66BB6A 100%);
+            box-shadow: var(--shadow);
+            color: #EAEAEA;
+            font-size: 26px;
+            font-weight: 800
+        }
+
+        .awsgrid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px
+        }
+
+        .awsgrid .span2 {
+            grid-column: 1/-1
+        }
+
+        .awsc {
+            padding: 22px 26px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px
+        }
+
+        .awsh {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 14px;
+            border-bottom: 1px solid rgba(165, 214, 167, .4)
+        }
+
+        .awsh h3 {
+            font-size: 17px;
+            font-weight: 800;
+            letter-spacing: -.2px
+        }
+
+        .awsh span {
+            color: var(--mute);
+            font-size: 12px;
+            font-weight: 600
+        }
+
+        .metrics {
+            display: flex;
+            gap: 20px
+        }
+
+        .metrics>div {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-left: 0
+        }
+
+        .metrics.sep>div+div {
+            border-left: 1px solid rgba(165, 214, 167, .4);
+            padding-left: 24px
+        }
+
+        .metrics label {
+            color: var(--mute);
+            font-size: 12px;
+            font-weight: 600
+        }
+
+        .metrics .n {
+            display: flex;
+            align-items: baseline;
+            gap: 6px
+        }
+
+        .metrics .n b {
+            font-size: 32px;
+            font-weight: 800;
+            letter-spacing: -.6px;
+            line-height: 32px
+        }
+
+        .metrics .n span {
+            color: var(--g5);
+            font-size: 13px;
+            font-weight: 600
+        }
+
+        .bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 7px;
+            height: 32px
+        }
+
+        .bars i {
+            flex: 1;
+            background: var(--g3);
+            border-radius: 5px
+        }
+
+        .bars i.m {
+            background: var(--g5)
+        }
+
+        .bars i.d {
+            background: var(--g9)
+        }
+
+        .cap {
+            color: var(--mute);
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 6px
+        }
+
+        .lastm {
+            text-align: right;
+            color: var(--mute);
+            font-size: 11px;
+            font-weight: 600
+        }
+
+        .bot {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--g5);
+            display: grid;
+            place-items: center;
+            border: 0;
+            cursor: pointer;
+            box-shadow: var(--shadow)
+        }
+
+        /* responsive */
+        @media(max-width:1100px) {
+
+            .hero,
+            .row3 {
+                grid-template-columns: 1fr
+            }
+
+            .row2 {
+                flex-direction: column
+            }
+
+            .hwcards {
+                flex-wrap: wrap
+            }
+
+            .hwc {
+                flex: 1 1 220px
+            }
+
+            .hw {
+                grid-template-columns: repeat(2, 1fr);
+                row-gap: 16px
+            }
+        }
+
+        @media(max-width:800px) {
+            .container {
+                padding: 12px 16px 60px
+            }
+
+            .nav-links {
+                display: none
+            }
+
+            .nav {
+                padding: 0 16px
+            }
+
+            .sensors {
+                flex-direction: column
+            }
+
+            .awsgrid {
+                grid-template-columns: 1fr
+            }
+
+            .metrics {
+                flex-wrap: wrap
+            }
+
+            .metrics.sep>div+div {
+                border-left: 0;
+                padding-left: 0
+            }
+
+            .weather {
+                flex-direction: column;
+                align-items: flex-start
+            }
+
+            .leaf {
+                display: none
+            }
+
+            .gear {
+                width: 48px;
+                height: 48px
+            }
+
+            .awsbar,
+            h2.sec {
+                font-size: 22px
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+
+        <div class="top-row">
+            <nav class="nav">
+                <img class="logo"
+                    src="https://api.builder.io/api/v1/image/assets/TEMP/89032a6d647c0ec0b88c5710a65c9496aa902962?width=148"
+                    alt="" />
+                <div class="nav-links">
+                    <a href="#top" class="active">Dashboard</a><a href="#relay">Relay</a><a
+                        href="#telemetri">Telemetri</a><a href="#hardware">Hardware</a><a href="#aws">AWS</a>
+                </div>
+                <div class="nav-user"><span>Viewer</span>
+                    <svg width="42" height="42" viewBox="0 0 42 42" fill="none" stroke="#A5D6A7" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path
+                            d="M38.5 21C38.5 30.665 30.665 38.5 21 38.5C11.335 38.5 3.5 30.665 3.5 21C3.5 11.335 11.335 3.5 21 3.5C30.665 3.5 38.5 11.335 38.5 21Z" />
+                        <path
+                            d="M26.25 17.5C26.25 20.3995 23.8995 22.75 21 22.75C18.1005 22.75 15.75 20.3995 15.75 17.5C15.75 14.6005 18.1005 12.25 21 12.25C23.8995 12.25 26.25 14.6005 26.25 17.5Z" />
+                        <path
+                            d="M12.25 36.1585V33.25C12.25 32.3217 12.6187 31.4315 13.2751 30.7751C13.9315 30.1187 14.8217 29.75 15.75 29.75H26.25C27.1783 29.75 28.0685 30.1187 28.7249 30.7751C29.3813 31.4315 29.75 32.3217 29.75 33.25V36.1585" />
+                    </svg>
+                </div>
+            </nav>
+            <div class="gear">
+                <svg width="31" height="32" viewBox="0 0 31 32" fill="none">
+                    <path
+                        d="M15.5 11.3a4.1 3.9 0 100 7.8 4.1 3.9 0 000-7.8zm15.1 8.2l-2.4-1.9c.1-.6.2-1.3.2-2s-.1-1.3-.2-2l2.4-1.9c.2-.2.3-.4.4-.6s0-.5-.1-.7l-.03-.1a16 16 0 00-3-4.8l-.07-.07a1 1 0 00-1.3-.3l-3 1c-1.1-.9-2.3-1.5-3.6-2L19.4 1.2a1 1 0 00-.9-.9L18.4.2a16 16 0 00-5.9 0l-.1.04a1 1 0 00-.9.9L11 4.1c-1.3.5-2.5 1.2-3.6 2l-3-1a1 1 0 00-1.3.3l-.07.07A16 16 0 00.1 10.3l-.03.1c-.2.4 0 .9.4 1.2l2.4 2c-.1.6-.2 1.3-.2 2 0 .7.1 1.3.2 2l-2.4 2a1 1 0 00-.4 1.2l.03.1c.7 1.7 1.6 3.3 2.9 4.8l.07.07c.2.2.4.3.6.4.2.1.5 0 .7-.1l3-1c1.1.8 2.3 1.5 3.6 2l.6 3c.04.2.2.4.3.6.2.2.4.3.6.3l.1.02c1.9.3 3.9.3 5.8 0l.1-.02c.2 0 .5-.1.6-.3.2-.2.3-.4.3-.6l.6-2.9c1.3-.5 2.5-1.1 3.6-2l3 1c.2.1.5 0 .7-.1.2-.1.4-.2.6-.4l.07-.07c1.3-1.4 2.2-3 2.9-4.8l.03-.1c.2-.4 0-.9-.4-1.2zM15.5 21.3c-3.5 0-6.4-2.7-6.4-6.1s2.9-6.1 6.4-6.1 6.4 2.7 6.4 6.1-2.9 6.1-6.4 6.1z"
+                        fill="#A5D6A7" />
+                </svg>
+            </div>
+        </div>
+
+        <section class="hero" id="top">
+            <div>
+                <div style="color:#fff;font-size:20px;font-weight:600;opacity:0">.</div>
+                <h1>Hardware Health</h1>
+                <div class="uptime"><b id="uptime">00:00:00</b><span>UPTIME</span></div>
+            </div>
+            <div class="hw">
+                <div>
+                    <div class="l"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#A5D6A7"
+                            stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3.33 8.67a6.4 6.4 0 019.34 0" />
+                            <path d="M5.67 11a3.3 3.3 0 014.66 0" />
+                            <path d="M1.33 5.88a10.7 10.7 0 0113.34 0" />
+                            <path d="M8 13.33h.01" />
+                        </svg>ESP32</div>
+                    <div class="v">Online</div>
+                    <div class="s">Active</div>
+                </div>
+                <div>
+                    <div class="l"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#A5D6A7"
+                            stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M6.67 1.33v4.87" />
+                            <path d="M9.33 6.2V1.33" />
+                            <path d="M5.67 1.33h4.67" />
+                            <path d="M9.33 6.2a4.4 4.4 0 11-2.67 0" />
+                            <path d="M3.68 10.67h8.64" />
+                        </svg>Sensor pH</div>
+                    <div class="v">Normal</div>
+                    <div class="s">Active</div>
+                </div>
+                <div>
+                    <div class="l"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#A5D6A7"
+                            stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round">
+                            <path
+                                d="M8 14.67a4.67 4.67 0 004.67-4.67c0-1.33-.67-2.6-2-3.67S8.33 3.67 8 2c-.33 1.67-1.33 3.27-2.67 4.33S3.33 8.67 3.33 10A4.67 4.67 0 008 14.67z" />
+                        </svg>Sensor TDS</div>
+                    <div class="v">Normal</div>
+                    <div class="s">Active</div>
+                </div>
+                <div>
+                    <div class="l"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#A5D6A7"
+                            stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="8" cy="8" r="2.67" />
+                            <path
+                                d="M8 1.33v1.33M8 13.33v1.33M3.29 3.29l.94.94M11.77 11.77l.94.94M1.33 8h1.33M13.33 8h1.33M4.23 11.77l-.94.94M12.71 3.29l-.94.94" />
+                        </svg>BH1750</div>
+                    <div class="v">Normal</div>
+                    <div class="s">Active</div>
+                </div>
+                <div>
+                    <div class="l"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#A5D6A7"
+                            stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M8 14.67v-3.34M6 5.33v-4M10 5.33v-4" />
+                            <path d="M12 5.33v3.34a2.67 2.67 0 01-2.67 2.66H6.67A2.67 2.67 0 014 8.67V5.33h8z" />
+                        </svg>Relay 8CH</div>
+                    <div class="v">Normal</div>
+                    <div class="s">Active</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="row2">
+            <div class="card weather">
+                <div>
+                    <div style="display:flex;gap:8px;align-items:center"><svg width="16" height="16" viewBox="0 0 16 16"
+                            fill="none" stroke="#66BB6A" stroke-width="1.33" stroke-linecap="round"
+                            stroke-linejoin="round">
+                            <circle cx="8" cy="8" r="6.67" />
+                            <path d="M8 4v4l2.67 1.33" />
+                        </svg><span class="eyebrow">Weather &amp; time</span></div>
+                    <div class="date" id="date">Tuesday, 10 November 2026 · 10:15 WIB</div>
+                    <div class="temp">29°C</div>
+                    <div class="desc">Partly Cloudy · Bandung</div>
+                    <div class="wstats">
+                        <div><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#66BB6A"
+                                stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round">
+                                <path
+                                    d="M10 18.33a5.83 5.83 0 005.83-5.83c0-1.67-.83-3.25-2.5-4.58S10.42 4.58 10 2.5C9.58 4.58 8.33 6.58 6.67 7.92S4.17 10.83 4.17 12.5A5.83 5.83 0 0010 18.33z" />
+                            </svg>
+                            <div><small>Humidity</small>72%</div>
+                        </div>
+                        <div><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#66BB6A"
+                                stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14.75 6.42a2.1 2.1 0 113.5 2.62A2.1 2.1 0 0116.25 10H1.67" />
+                                <path d="M8 3.83a1.7 1.7 0 112.57 2.1 1.7 1.7 0 01-1.4.74H1.67" />
+                                <path d="M10.5 16.17a1.7 1.7 0 102.57-2.1 1.7 1.7 0 00-1.4-.74H1.67" />
+                            </svg>
+                            <div><small>Wind</small>8 km/j</div>
+                        </div>
+                        <div><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#66BB6A"
+                                stroke-width="1.67" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="10" cy="10" r="3.33" />
+                                <path
+                                    d="M10 1.67v1.66M10 16.67v1.66M4.11 4.11l1.17 1.17M14.72 14.72l1.17 1.17M1.67 10h1.66M16.67 10h1.66M5.28 14.72l-1.17 1.17M15.89 4.11l-1.17 1.17" />
+                            </svg>
+                            <div><small>UV Index</small>6</div>
+                        </div>
+                    </div>
+                </div>
+                <svg width="110" height="110" viewBox="0 0 110 110" fill="none" stroke="#66BB6A" stroke-width="5.96"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M55 9.17v9.16M22.6 22.6l6.46 6.46M91.67 55h9.16M87.4 22.6l-6.46 6.46" />
+                    <path d="M73.09 57.98a18.3 18.3 0 00-27.16-18.92" />
+                    <path d="M59.58 100.83h-27.5A27.5 27.5 0 1154.54 73.33h5.04a13.75 13.75 0 010 27.5z" />
+                </svg>
+            </div>
+            <div class="sensors">
+                <div class="card sensor">
+                    <div class="ic"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="#1B5E20"
+                            stroke-width="2.17" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M10.83 2.17v7.92M15.17 10.08V2.16M9.21 2.17h7.58" />
+                            <path d="M15.17 10.08a7.3 7.3 0 11-4.34 0" />
+                            <path d="M5.98 17.33h14.04" />
+                        </svg></div>
+                    <div class="lbl">ph</div>
+                    <div class="big"><b>6.2</b><span>pH</span></div>
+                    <div style="height:16px"></div>
+                    <div class="bar"><i style="width:52%"></i></div>
+                    <div class="st">Ideal</div>
+                </div>
+                <div class="card sensor">
+                    <div class="ic"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="#1B5E20"
+                            stroke-width="2.17" stroke-linecap="round" stroke-linejoin="round">
+                            <path
+                                d="M13 23.83a7.58 7.58 0 007.58-7.58c0-2.17-1.08-4.22-3.25-5.96S13.54 5.96 13 3.25c-.54 2.71-2.17 5.31-4.33 7.04S5.42 14.08 5.42 16.25A7.58 7.58 0 0013 23.83z" />
+                        </svg></div>
+                    <div class="lbl">nutrition</div>
+                    <div class="big"><b>1050</b><span>ppm</span></div>
+                    <div style="height:16px"></div>
+                    <div class="bar"><i style="width:58%"></i></div>
+                    <div class="st">Ideal</div>
+                </div>
+                <div class="card sensor">
+                    <div class="ic"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="#1B5E20"
+                            stroke-width="2.17" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="13" cy="13" r="4.33" />
+                            <path
+                                d="M13 2.17v2.16M13 21.67v2.16M5.34 5.34l1.53 1.53M19.13 19.13l1.53 1.53M2.17 13h2.17M21.67 13h2.17M6.87 19.13l-1.53 1.53M20.66 5.34l-1.53 1.53" />
+                        </svg></div>
+                    <div class="lbl">light</div>
+                    <div class="big"><b>18.4k</b><span>lx</span></div>
+                    <div style="height:16px"></div>
+                    <div class="bar"><i style="width:46%"></i></div>
+                    <div class="st">Cukup</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="row3" id="relay">
+            <div class="card">
+                <div class="eyebrow">water temp</div>
+                <div class="donut-wrap">
+                    <div class="donut">
+                        <div><b>24.6°</b><span>Celcius</span></div>
+                    </div>
+                </div>
+                <div class="minmax"><span>Min 22°</span><span>Max 28°</span></div>
+            </div>
+            <div class="card">
+                <div class="eyebrow">Threshold Monitor</div>
+                <div class="sub">Safe limits for parameters</div>
+                <div class="thr">
+                    <div>
+                        <div class="h"><span>pH</span><span>6.2 / 6.5</span></div>
+                        <div class="bar"><i style="width:95%"></i></div>
+                    </div>
+                    <div>
+                        <div class="h"><span>TDS</span><span>1050 / 1200</span></div>
+                        <div class="bar"><i style="width:87%"></i></div>
+                    </div>
+                    <div>
+                        <div class="h"><span>Water Temp</span><span>24.6 / 28</span></div>
+                        <div class="bar"><i style="width:88%"></i></div>
+                    </div>
+                    <div>
+                        <div class="h"><span>Humidity</span><span>72 / 85</span></div>
+                        <div class="bar"><i style="width:85%"></i></div>
+                    </div>
+                    <div>
+                        <div class="h"><span>Light</span><span>18k / 30k</span></div>
+                        <div class="bar"><i style="width:60%"></i></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="card chart" id="telemetri">
+            <div class="chart-head">
+                <div class="eyebrow">Telemetry Graph</div>
+                <div class="right-ctl">
+                    <div class="legend"><span><i style="background:#1B5E20"></i>TDS</span><span><i
+                                style="background:#66BB6A"></i>pH</span><span><i
+                                style="background:#A5D6A7"></i>Temp</span></div>
+                    <div class="tabs" id="rangeTabs"><button>1J</button><button
+                            class="on">24J</button><button>7H</button><button>30H</button></div>
+                </div>
+            </div>
+            <div class="chartbox">
+                <div class="yax"><span>100</span><span>75</span><span>50</span><span>25</span><span></span></div>
+                <svg class="plot" viewBox="0 0 1260 260" preserveAspectRatio="none" fill="none">
+                    <defs>
+                        <linearGradient id="gr" x1="0" y1="0" x2="0" y2="1">
+                            <stop stop-color="#1B5E20" stop-opacity=".25" />
+                            <stop offset="1" stop-color="#1B5E20" stop-opacity="0" />
+                        </linearGradient>
+                    </defs>
+                    <g stroke="#E8F5E9">
+                        <path d="M0 .5H1260M0 70.5H1260M0 140.5H1260M0 210.5H1260M0 259.5H1260" />
+                    </g>
+                    <path
+                        d="M0 140C100 120 160 100 260 110C360 120 440 70 540 80C640 90 720 120 820 95C920 70 1020 60 1120 75C1220 90 1220 90 1260 85V260H0Z"
+                        fill="url(#gr)" />
+                    <path vector-effect="non-scaling-stroke"
+                        d="M0 140C100 120 160 100 260 110C360 120 440 70 540 80C640 90 720 120 820 95C920 70 1020 60 1120 75C1220 90 1220 90 1260 85"
+                        stroke="#1B5E20" stroke-width="3" />
+                    <path vector-effect="non-scaling-stroke"
+                        d="M0 180C120 170 200 190 300 175C400 160 480 150 580 160C680 170 760 185 860 170C960 155 1040 150 1140 160C1240 170 1230 165 1260 162"
+                        stroke="#66BB6A" stroke-width="3" />
+                    <path vector-effect="non-scaling-stroke"
+                        d="M0 220C300 210 400 195 600 200C800 205 1000 190 1260 205" stroke="#A5D6A7"
+                        stroke-width="3" />
+                </svg>
+                <div class="xax">
+                    <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
+            </div>
+        </section>
+
+        <section class="card tcard">
+            <div class="thead">
+                <div>
+                    <div style="display:flex;gap:8px;align-items:center"><svg width="16" height="16" viewBox="0 0 16 16"
+                            fill="none" stroke="#66BB6A" stroke-width="1.33" stroke-linecap="round"
+                            stroke-linejoin="round">
+                            <path d="M2 8a6 6 0 106-6 6.3 6.3 0 00-4.5 1.83L2 5.33" />
+                            <path d="M2 2v3.33h3.33" />
+                            <path d="M8 4.67V8l2.67 1.33" />
+                        </svg><span class="eyebrow">History</span></div>
+                    <h2>Data Sensor</h2>
+                </div>
+                <button class="btn" id="csv"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"
+                        stroke="#1B5E20" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 10v2.67A1.33 1.33 0 0112.67 14H3.33A1.33 1.33 0 012 12.67V10" />
+                        <path d="M4.67 6.67L8 10l3.33-3.33" />
+                        <path d="M8 10V2" />
+                    </svg>Download CSV</button>
+            </div>
+            <div class="scroll">
+                <table id="hist">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>pH</th>
+                            <th>ppm</th>
+                            <th>water temp (°C)</th>
+                            <th>LIGHT (lx)</th>
+                            <th>humidity</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>10:15</td>
+                            <td>6.2</td>
+                            <td>1050</td>
+                            <td>24.6</td>
+                            <td>18.420</td>
+                            <td>72%</td>
+                            <td class="st">Normal</td>
+                        </tr>
+                        <tr>
+                            <td>10:00</td>
+                            <td>6.2</td>
+                            <td>1048</td>
+                            <td>24.4</td>
+                            <td>17.980</td>
+                            <td>73%</td>
+                            <td class="st">Normal</td>
+                        </tr>
+                        <tr>
+                            <td>09:45</td>
+                            <td>6.3</td>
+                            <td>1041</td>
+                            <td>24.1</td>
+                            <td>16.200</td>
+                            <td>74%</td>
+                            <td class="st">Normal</td>
+                        </tr>
+                        <tr>
+                            <td>09:30</td>
+                            <td>6.6</td>
+                            <td>1210</td>
+                            <td>23.9</td>
+                            <td>14.870</td>
+                            <td>76%</td>
+                            <td class="st warn">Warning</td>
+                        </tr>
+                        <tr>
+                            <td>09:15</td>
+                            <td>6.4</td>
+                            <td>1180</td>
+                            <td>23.7</td>
+                            <td>12.300</td>
+                            <td>77%</td>
+                            <td class="st">Normal</td>
+                        </tr>
+                        <tr>
+                            <td>09:00</td>
+                            <td>6.1</td>
+                            <td>1020</td>
+                            <td>23.5</td>
+                            <td>10.950</td>
+                            <td>79%</td>
+                            <td class="st">Normal</td>
+                        </tr>
+                        <tr>
+                            <td>08:45</td>
+                            <td>6.0</td>
+                            <td>1005</td>
+                            <td>23.2</td>
+                            <td>8.400</td>
+                            <td>81%</td>
+                            <td class="st">Normal</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <h2 class="sec" id="hardware">Hardware</h2>
+        <section class="hwcards">
+            <div class="card hwc" style="align-items:flex-start;justify-content:flex-start"><img
+                    src="https://api.builder.io/api/v1/image/assets/TEMP/e7dc2cdf91d59f00607cc537ea6d92df2a63304f?width=430"
+                    width="215" height="153" alt="" />
+                <h5>Sensor pH</h5>
+                <ul>
+                    <li>Modul: <b>PH-4502C</b></li>
+                    <li>Range: <b>0 – 14 pH</b></li>
+                    <li>Pin: <b>GPIO 34 (ADC)</b></li>
+                </ul>
+            </div>
+            <div class="card hwc" style="align-items:flex-start;justify-content:flex-start"><img
+                    src="https://api.builder.io/api/v1/image/assets/TEMP/a2e24c0215e34144b20d775e4061d15225031034?width=438"
+                    width="219" height="153" alt="" />
+                <h5>Sensor TDS</h5>
+                <ul>
+                    <li>Modul: <b>Gravity TDS</b></li>
+                    <li>Range: <b>0 – 1000+ ppm</b></li>
+                    <li>Pin: <b>GPIO 35 (ADC)</b></li>
+                </ul>
+            </div>
+            <div class="card hwc"><img
+                    src="https://api.builder.io/api/v1/image/assets/TEMP/bd1e009920ac69eda2227d1abb1a6e5ebeb57b53?width=314"
+                    width="157" height="156" alt="" />
+                <h5>Light Sensor</h5>
+                <ul>
+                    <li>Modul: <b>BH1750</b></li>
+                    <li>Range: <b>1 – 65535 lx</b></li>
+                    <li>Pin: <b>I2C SDA 21 / SCL 22</b></li>
+                </ul>
+            </div>
+            <div class="card hwc"><img
+                    src="https://api.builder.io/api/v1/image/assets/TEMP/d1497d1fea551c7305857fe588ce16174ee26fc2?width=316"
+                    width="158" height="157" alt="" />
+                <h5>Temp &amp; Humidity</h5>
+                <ul>
+                    <li>Modul: <b>AHT10</b></li>
+                    <li>Range: <b>-40 – 80 °C</b></li>
+                    <li>Pin: <b>GPIO 4</b></li>
+                </ul>
+            </div>
+            <div class="card hwc"><img
+                    src="https://api.builder.io/api/v1/image/assets/TEMP/eb9aaf1b2b799a83b64102c5993ad52da26e1e00?width=312"
+                    width="156" height="156" alt="" />
+                <h5>Modul Relay</h5>
+                <ul>
+                    <li>Tipe: <b>8 Channel 5V</b></li>
+                    <li>Beban: <b>10A 250VAC</b></li>
+                    <li>Pin: <b>GPIO 13 – 27</b></li>
+                </ul>
+            </div>
+        </section>
+
+        <div class="awsbar" id="aws">Automatic Weather Station</div>
+
+        <section class="awsgrid">
+            <div class="card awsc">
+                <div class="awsh">
+                    <h3>Air Monitoring</h3><span>Connected</span>
+                </div>
+                <div class="metrics">
+                    <div><label>Temp</label>
+                        <div class="n"><b>28,4</b><span>°C</span></div>
+                    </div>
+                    <div><label>Humidity</label>
+                        <div class="n"><b>76</b><span>% RH</span></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="bars" data-h="9,10,12,13,14,14,15,16,16,17,17,16,16"></div>
+                    <div class="cap">Temperature trend · 06:00–10:30 WIB</div>
+                </div>
+            </div>
+            <div class="card awsc">
+                <div class="awsh">
+                    <h3>Lux Monitoring</h3><span>Connected</span>
+                </div>
+                <div class="metrics">
+                    <div><label>Solar radiation</label>
+                        <div class="n"><b>642</b><span>W/m²</span></div>
+                    </div>
+                    <div><label>Photosynthetically active radiation</label>
+                        <div class="n"><b>1.180</b><span>µmol/m²/s</span></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="bars" data-h="3,4,5,7,10,14,18,22,22,21,21,22,25"></div>
+                    <div class="cap">Solar radiation trend · 06:00–10:30 WIB</div>
+                </div>
+            </div>
+            <div class="card awsc span2">
+                <div class="awsh">
+                    <h3>Soil Monitoring</h3><span>Connected</span>
+                </div>
+                <div class="metrics sep">
+                    <div><label>Soil temperature</label>
+                        <div class="n"><b>26,8</b><span>°C</span></div>
+                    </div>
+                    <div><label>Soil moisture</label>
+                        <div class="n"><b>42</b><span>% VWC</span></div>
+                    </div>
+                    <div><label>Electrical conductivity</label>
+                        <div class="n"><b>1,2</b><span>mS/cm</span></div>
+                    </div>
+                    <div><label>Soil pH</label>
+                        <div class="n"><b>6,5</b><span>pH</span></div>
+                    </div>
+                </div>
+                <div class="lastm">Last measurement: 10:30 WIB</div>
+            </div>
+            <div class="card awsc span2 aws">
+                <div class="awsh">
+                    <h3>History AWS</h3>
+                    <div class="tabs" id="awsTabs"><button
+                            class="on">Daily</button><button>Weekly</button><button>Monthly</button></div>
+                </div>
+                <div class="scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>air temperature</th>
+                                <th>humidity</th>
+                                <th>Wind Speed &amp; Direction</th>
+                                <th>Solar Radiation &amp; PAR</th>
+                                <th>Soil Moisture</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>10:00</td>
+                                <td>28,4<small>°C</small></td>
+                                <td>76<small>% RH</small></td>
+                                <td>2,8<small>m/s · Tenggara (135°)</small></td>
+                                <td>642<small>W/m² (PAR 1.180)</small></td>
+                                <td>42<small>% VWC</small></td>
+                            </tr>
+                            <tr>
+                                <td>09:00</td>
+                                <td>27,2<small>°C</small></td>
+                                <td>79<small>% RH</small></td>
+                                <td>2,4<small>m/s · Tenggara (130°)</small></td>
+                                <td>520<small>W/m² (PAR 980)</small></td>
+                                <td>43<small>% VWC</small></td>
+                            </tr>
+                            <tr>
+                                <td>08:00</td>
+                                <td>25,6<small>°C</small></td>
+                                <td>82<small>% RH</small></td>
+                                <td>1,8<small>m/s · Timur (95°)</small></td>
+                                <td>310<small>W/m² (PAR 620)</small></td>
+                                <td>45<small>% VWC</small></td>
+                            </tr>
+                            <tr>
+                                <td>07:00</td>
+                                <td>23,8<small>°C</small></td>
+                                <td>86<small>% RH</small></td>
+                                <td>1,2<small>m/s · Barat (270°)</small></td>
+                                <td>140<small>W/m² (PAR 280)</small></td>
+                                <td>46<small>% VWC</small></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        (function () {
+            var t0 = Date.now(), up = document.getElementById('uptime'), p = function (n) { return String(n).padStart(2, '0') };
+            setInterval(function () { var s = Math.floor((Date.now() - t0) / 1000); up.textContent = p(Math.floor(s / 3600)) + ':' + p(Math.floor(s % 3600 / 60)) + ':' + p(s % 60) }, 1000);
+            document.querySelectorAll('.bars').forEach(function (b, k) {
+                var h = b.dataset.h.split(',').map(Number), max = Math.max.apply(null, h);
+                h.forEach(function (v, i) { var e = document.createElement('i'); e.style.height = Math.max(4, v / max * 32) + 'px'; if (i >= h.length * .65) e.className = 'd'; else if (i >= h.length * .3) e.className = 'm'; b.appendChild(e) });
+            });
+            [['rangeTabs'], ['awsTabs']].forEach(function (a) {
+                var c = document.getElementById(a[0]);
+                c.addEventListener('click', function (e) { if (e.target.tagName !== 'BUTTON') return; c.querySelectorAll('button').forEach(function (b) { b.classList.remove('on') }); e.target.classList.add('on') });
+            });
+            document.getElementById('csv').addEventListener('click', function () {
+                var rows = [].map.call(document.querySelectorAll('#hist tr'), function (r) { return [].map.call(r.children, function (c) { return '"' + c.textContent.trim() + '"' }).join(',') }).join('\n');
+                var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows], { type: 'text/csv' })); a.download = 'sensor-data.csv'; a.click();
+            });
+        })();
+    </script>
+</body>
+
+</html>
