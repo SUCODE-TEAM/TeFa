@@ -594,6 +594,75 @@
             }
 
             // ============================================================
+            // SHARED PAGINATION BUTTON BUILDER (Max 5 pages + ellipsis)
+            // ============================================================
+            function renderTablePaginationButtons(btnsContainer, currentPage, totalPages, onPageSelect) {
+                if (!btnsContainer) return;
+                btnsContainer.innerHTML = '';
+
+                function createPageBtn(page) {
+                    var btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'table-pagination-btn' + (page === currentPage ? ' active' : '');
+                    btn.textContent = page;
+                    btn.addEventListener('click', function() {
+                        onPageSelect(page);
+                    });
+                    return btn;
+                }
+
+                function createEllipsis() {
+                    var ell = document.createElement('span');
+                    ell.className = 'table-pagination-ellipsis';
+                    ell.textContent = '...';
+                    return ell;
+                }
+
+                var prevBtn = document.createElement('button');
+                prevBtn.type = 'button';
+                prevBtn.className = 'table-pagination-btn';
+                prevBtn.innerHTML = '&lsaquo;';
+                prevBtn.title = 'Halaman Sebelumnya';
+                prevBtn.disabled = currentPage <= 1;
+                prevBtn.addEventListener('click', function() {
+                    if (currentPage > 1) onPageSelect(currentPage - 1);
+                });
+                btnsContainer.appendChild(prevBtn);
+
+                var maxVisible = 5;
+                var startPage = Math.max(1, currentPage - 2);
+                var endPage = Math.min(totalPages, startPage + maxVisible - 1);
+                if (endPage - startPage < maxVisible - 1) {
+                    startPage = Math.max(1, endPage - maxVisible + 1);
+                }
+
+                if (startPage > 1) {
+                    btnsContainer.appendChild(createPageBtn(1));
+                    if (startPage > 2) btnsContainer.appendChild(createEllipsis());
+                }
+
+                for (var p = startPage; p <= endPage; p++) {
+                    btnsContainer.appendChild(createPageBtn(p));
+                }
+
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) btnsContainer.appendChild(createEllipsis());
+                    btnsContainer.appendChild(createPageBtn(totalPages));
+                }
+
+                var nextBtn = document.createElement('button');
+                nextBtn.type = 'button';
+                nextBtn.className = 'table-pagination-btn';
+                nextBtn.innerHTML = '&rsaquo;';
+                nextBtn.title = 'Halaman Berikutnya';
+                nextBtn.disabled = currentPage >= totalPages || totalPages === 0;
+                nextBtn.addEventListener('click', function() {
+                    if (currentPage < totalPages) onPageSelect(currentPage + 1);
+                });
+                btnsContainer.appendChild(nextBtn);
+            }
+
+            // ============================================================
             // SENSOR DATA TABLE PAGINATION & DATA ENGINE
             // ============================================================
             var sensorHistoryData = [];
@@ -655,83 +724,10 @@
                 }
 
                 function renderButtons(totalPages) {
-                    if (!btnsContainer) return;
-                    btnsContainer.innerHTML = '';
-
-                    // Prev button
-                    var prevBtn = document.createElement('button');
-                    prevBtn.type = 'button';
-                    prevBtn.className = 'table-pagination-btn';
-                    prevBtn.innerHTML = '&lsaquo;';
-                    prevBtn.title = 'Halaman Sebelumnya';
-                    prevBtn.disabled = currentPage === 1;
-                    prevBtn.addEventListener('click', function() {
-                        if (currentPage > 1) {
-                            currentPage--;
-                            render();
-                        }
-                    });
-                    btnsContainer.appendChild(prevBtn);
-
-                    // Page buttons
-                    var maxVisible = 5;
-                    var startPage = Math.max(1, currentPage - 2);
-                    var endPage = Math.min(totalPages, startPage + maxVisible - 1);
-                    if (endPage - startPage < maxVisible - 1) {
-                        startPage = Math.max(1, endPage - maxVisible + 1);
-                    }
-
-                    if (startPage > 1) {
-                        var p1 = createPageBtn(1);
-                        btnsContainer.appendChild(p1);
-                        if (startPage > 2) {
-                            var ell = document.createElement('span');
-                            ell.className = 'table-pagination-ellipsis';
-                            ell.textContent = '...';
-                            btnsContainer.appendChild(ell);
-                        }
-                    }
-
-                    for (var p = startPage; p <= endPage; p++) {
-                        btnsContainer.appendChild(createPageBtn(p));
-                    }
-
-                    if (endPage < totalPages) {
-                        if (endPage < totalPages - 1) {
-                            var ell2 = document.createElement('span');
-                            ell2.className = 'table-pagination-ellipsis';
-                            ell2.textContent = '...';
-                            btnsContainer.appendChild(ell2);
-                        }
-                        btnsContainer.appendChild(createPageBtn(totalPages));
-                    }
-
-                    // Next button
-                    var nextBtn = document.createElement('button');
-                    nextBtn.type = 'button';
-                    nextBtn.className = 'table-pagination-btn';
-                    nextBtn.innerHTML = '&rsaquo;';
-                    nextBtn.title = 'Halaman Berikutnya';
-                    nextBtn.disabled = currentPage === totalPages || totalPages === 0;
-                    nextBtn.addEventListener('click', function() {
-                        if (currentPage < totalPages) {
-                            currentPage++;
-                            render();
-                        }
-                    });
-                    btnsContainer.appendChild(nextBtn);
-                }
-
-                function createPageBtn(page) {
-                    var btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'table-pagination-btn' + (page === currentPage ? ' active' : '');
-                    btn.textContent = page;
-                    btn.addEventListener('click', function() {
+                    renderTablePaginationButtons(btnsContainer, currentPage, totalPages, function(page) {
                         currentPage = page;
                         render();
                     });
-                    return btn;
                 }
 
                 if (perPageSelect) {
@@ -854,53 +850,10 @@
                 }
 
                 function renderButtons(totalPages) {
-                    if (!btnsContainer) return;
-                    btnsContainer.innerHTML = '';
-
-                    // Prev
-                    var prevBtn = document.createElement('button');
-                    prevBtn.type = 'button';
-                    prevBtn.className = 'table-pagination-btn';
-                    prevBtn.innerHTML = '&lsaquo;';
-                    prevBtn.title = 'Halaman Sebelumnya';
-                    prevBtn.disabled = currentPage === 1;
-                    prevBtn.addEventListener('click', function() {
-                        if (currentPage > 1) {
-                            currentPage--;
-                            render();
-                        }
+                    renderTablePaginationButtons(btnsContainer, currentPage, totalPages, function(page) {
+                        currentPage = page;
+                        render();
                     });
-                    btnsContainer.appendChild(prevBtn);
-
-                    // Page buttons
-                    for (var p = 1; p <= totalPages; p++) {
-                        (function(page) {
-                            var btn = document.createElement('button');
-                            btn.type = 'button';
-                            btn.className = 'table-pagination-btn' + (page === currentPage ? ' active' : '');
-                            btn.textContent = page;
-                            btn.addEventListener('click', function() {
-                                currentPage = page;
-                                render();
-                            });
-                            btnsContainer.appendChild(btn);
-                        })(p);
-                    }
-
-                    // Next
-                    var nextBtn = document.createElement('button');
-                    nextBtn.type = 'button';
-                    nextBtn.className = 'table-pagination-btn';
-                    nextBtn.innerHTML = '&rsaquo;';
-                    nextBtn.title = 'Halaman Berikutnya';
-                    nextBtn.disabled = currentPage === totalPages || totalPages === 0;
-                    nextBtn.addEventListener('click', function() {
-                        if (currentPage < totalPages) {
-                            currentPage++;
-                            render();
-                        }
-                    });
-                    btnsContainer.appendChild(nextBtn);
                 }
 
                 if (tabsContainer) {
@@ -932,7 +885,13 @@
                     if (!awsHistoryData[targetTab]) awsHistoryData[targetTab] = [];
                     awsHistoryData[targetTab].unshift(row);
                     if (awsHistoryData[targetTab].length > 200) awsHistoryData[targetTab].pop();
-                    render();
+                    if (currentTab === targetTab) render();
+                };
+
+                window.setAwsHistoryData = function(tab, rows) {
+                    var targetTab = tab || 'daily';
+                    awsHistoryData[targetTab] = Array.isArray(rows) ? rows : [];
+                    if (currentTab === targetTab) render();
                 };
 
                 render();

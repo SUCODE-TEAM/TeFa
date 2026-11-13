@@ -4,8 +4,8 @@
     // dengan port TCP 1883 pada ESP32 menggunakan protokol MQTT v3.1.1 (protocolVersion: 4).
     var MQTT_CONFIG = {
         brokerUrl: 'wss://broker.emqx.io:8084/mqtt',
-        topic: 'tefa/smkn2yogyakarta/data',
-        publishTopic: 'tefa/smkn2yogyakarta/control',
+        topic: 'tefa/hidroponik/sensor',
+        publishTopic: 'tefa/hidroponik/aktuator',
         options: {
             clientId: 'tefa_web_' + Math.random().toString(16).slice(2, 10),
             protocolId: 'MQTT',
@@ -214,12 +214,12 @@
             var cp2y = Math.min(h - 6, Math.max(6, p2.y - (p3.y - p1.y) / 6));
 
             d += ' C' + cp1x.toFixed(2) + ' ' + cp1y.toFixed(2) + ',' +
-                 cp2x.toFixed(2) + ' ' + cp2y.toFixed(2) + ',' +
-                 p2.x.toFixed(2) + ' ' + p2.y.toFixed(2);
+                cp2x.toFixed(2) + ' ' + cp2y.toFixed(2) + ',' +
+                p2.x.toFixed(2) + ' ' + p2.y.toFixed(2);
         }
         if (closeArea) {
             d += ' L' + pts[pts.length - 1].x.toFixed(2) + ' ' + h +
-                 ' L' + pts[0].x.toFixed(2) + ' ' + h + ' Z';
+                ' L' + pts[0].x.toFixed(2) + ' ' + h + ' Z';
         }
         return d;
     }
@@ -462,9 +462,14 @@
         }
 
         var weatherDesc = document.querySelector('.card.weather .desc');
-        if (weatherDesc && !isOnline) {
-            weatherDesc.textContent = subText;
-            weatherDesc.style.color = stateText === 'Connecting' ? '#E65100' : 'var(--red)';
+        if (weatherDesc) {
+            if (isOnline) {
+                weatherDesc.textContent = 'Broker terhubung · ' + subText;
+                weatherDesc.style.color = '#2E7D32';
+            } else {
+                weatherDesc.textContent = subText;
+                weatherDesc.style.color = stateText === 'Connecting' ? '#E65100' : 'var(--red)';
+            }
         }
     }
 
@@ -570,6 +575,30 @@
         }
     }
 
+    function toSensorNumber(val) {
+        if (val === null || val === undefined || val === '') return null;
+        var num = Number(val);
+        return isNaN(num) ? null : num;
+    }
+
+    function pickSensorValue(sensorMap, ids, defaultSatuan) {
+        for (var i = 0; i < ids.length; i++) {
+            var item = sensorMap[ids[i]];
+            if (item) {
+                var num = toSensorNumber(item.value);
+                if (num !== null) {
+                    return {
+                        id: item.id,
+                        name: item.name || item.id,
+                        value: num,
+                        satuan: item.satuan || defaultSatuan || ''
+                    };
+                }
+            }
+        }
+        return null;
+    }
+
     function updateDashboardUI(payload) {
         if (!payload || !Array.isArray(payload.sensors)) return;
 
@@ -578,13 +607,24 @@
             if (s && s.id) sensorMap[s.id] = s;
         });
 
-        var wifi = sensorMap['kekuatan_wiFi'];
-        var ph = sensorMap['001pH'];
-        var ec = sensorMap['002EC'];
-        var light = sensorMap['003bh1750'];
-        var airTemp = sensorMap['004aht20_temp'];
-        var airHum = sensorMap['004aht20_hum'];
-        var waterTemp = sensorMap['005sensorair'];
+        var wifi = pickSensorValue(sensorMap, ['TEL-WIFI-001', 'kekuatan_wiFi'], 'dBm');
+        var ph = pickSensorValue(sensorMap, ['SNS-PH-001', '001pH'], 'pH');
+        var ec = pickSensorValue(sensorMap, ['SNS-EC-002', '002EC'], 'mS/cm');
+        var light = pickSensorValue(sensorMap, ['SNS-BH-003', '003bh1750'], 'Lux');
+        var waterTemp = pickSensorValue(sensorMap, ['SNS-WT-005', '005sensorair', 'SNS-WT-006'], '°C');
+        var reservoirTemp = pickSensorValue(sensorMap, ['SNS-WT-006'], '°C');
+
+        var airTemp = null;
+        var airHum = null;
+        var ahtCombo = sensorMap['SNS-AHT-004'];
+        if (ahtCombo) {
+            var tVal = toSensorNumber(ahtCombo.temperature !== undefined ? ahtCombo.temperature : ahtCombo.value);
+            var hVal = toSensorNumber(ahtCombo.humidity);
+            if (tVal !== null) airTemp = { value: tVal, satuan: ahtCombo.satuan_temp || '°C' };
+            if (hVal !== null) airHum = { value: hVal, satuan: ahtCombo.satuan_hum || '% RH' };
+        }
+        if (!airTemp) airTemp = pickSensorValue(sensorMap, ['004aht20_temp'], '°C');
+        if (!airHum) airHum = pickSensorValue(sensorMap, ['004aht20_hum'], '%');
 
         var thr = getThresholds();
         var wibTime = formatWibTime(payload.timestamp);
@@ -606,7 +646,13 @@
             var s0 = hwItems[0].querySelector('.s');
             if (v0) { v0.textContent = 'Online'; v0.classList.remove('off'); }
             if (s0) {
-                s0.textContent = wifi ? ('WiFi ' + wifi.value.toFixed(1) + ' ' + (wifi.satuan || 'Mbps')) : (payload.device_id || 'Terhubung');
+                if (wifi) {
+                    var wifiUnit = wifi.satuan || 'dBm';
+                    var wifiValStr = wifiUnit.toLowerCase() === 'dbm' ? wifi.value.toFixed(0) : wifi.value.toFixed(1);
+                    s0.textContent = 'WiFi ' + wifiValStr + ' ' + wifiUnit;
+                } else {
+                    s0.textContent = payload.device_id || 'Terhubung';
+                }
                 s0.classList.remove('off');
             }
 
@@ -634,11 +680,18 @@
                 if (s3) { s3.textContent = 'Aktif'; s3.classList.remove('off'); }
             }
 
-            // Relay 8CH
+            // Relay 8CH / system_status
             var v4 = hwItems[4].querySelector('.v');
             var s4 = hwItems[4].querySelector('.s');
-            if (v4) { v4.textContent = 'Standby'; v4.classList.remove('off'); }
-            if (s4) { s4.textContent = 'Terhubung'; s4.classList.remove('off'); }
+            var sys = payload.system_status || null;
+            if (v4) {
+                v4.textContent = (sys && sys.pompa) ? ('Pompa ' + String(sys.pompa).toUpperCase()) : 'Standby';
+                v4.classList.remove('off');
+            }
+            if (s4) {
+                s4.textContent = (sys && sys.deepsleep_sec !== undefined) ? ('DeepSleep ' + sys.deepsleep_sec + 's') : 'Terhubung';
+                s4.classList.remove('off');
+            }
         }
 
         // 2. Update Weather & Time Card
@@ -689,7 +742,7 @@
                 var lxBar = sensorCards[2].querySelector('.bar i');
                 var lxSt = sensorCards[2].querySelector('.st');
                 if (lxB) lxB.innerHTML = light.value.toFixed(1) + ' <span style="font-size:15px;font-weight:600;color:var(--mute)">' + (light.satuan || 'lx') + '</span>';
-                if (lxBar) lxBar.style.width = Math.min(100, Math.max(5, (light.value / 10000) * 100)).toFixed(1) + '%';
+                if (lxBar) lxBar.style.width = Math.min(100, Math.max(5, (light.value / 30000) * 100)).toFixed(1) + '%';
                 if (lxSt) {
                     lxSt.textContent = light.value > 200 ? 'Terang' : 'Redup';
                     lxSt.style.color = '#2E7D32';
@@ -711,6 +764,9 @@
                 donut.classList.remove('disconnected');
                 var deg = Math.min(360, Math.max(0, (wtVal / 50) * 360)).toFixed(1);
                 donut.style.background = 'conic-gradient(var(--g5) 0 ' + deg + 'deg, var(--g1) ' + deg + 'deg 360deg)';
+                donut.title = reservoirTemp
+                    ? ('Tangki Nutrisi: ' + wtVal.toFixed(1) + ' °C · Tangki Reservoir: ' + reservoirTemp.value.toFixed(1) + ' °C')
+                    : ('Tangki Nutrisi: ' + wtVal.toFixed(1) + ' °C');
             }
             if (donutB) {
                 donutB.textContent = wtVal.toFixed(1) + '°';
@@ -733,7 +789,7 @@
                 { s: ec, text: ec ? ec.value.toFixed(2) + ' mS/cm' : 'N/A', pct: ec ? (ec.value / 3.0) * 100 : 0 },
                 { s: waterTemp, text: waterTemp ? waterTemp.value.toFixed(1) + ' °C' : 'N/A', pct: waterTemp ? (waterTemp.value / 50) * 100 : 0 },
                 { s: airHum, text: airHum ? airHum.value.toFixed(1) + ' %' : 'N/A', pct: airHum ? airHum.value : 0 },
-                { s: light, text: light ? light.value.toFixed(1) + ' lx' : 'N/A', pct: light ? (light.value / 10000) * 100 : 0 }
+                { s: light, text: light ? light.value.toFixed(1) + ' lx' : 'N/A', pct: light ? (light.value / 30000) * 100 : 0 }
             ];
             thrData.forEach(function (item, idx) {
                 var valSpan = thrRows[idx].querySelector('.h span:last-child');
@@ -756,6 +812,7 @@
             ec: ec ? ec.value : 0,
             waterTemp: waterTemp ? waterTemp.value : 0,
             airTemp: airTemp ? airTemp.value : 0,
+            airHum: airHum ? airHum.value : null,
             light: light ? light.value : 0
         };
         telemetryHistory.push(logEntry);
@@ -853,7 +910,7 @@
                 luxBars.forEach(function (bar, idx) {
                     var pt = telemetryHistory[telemetryHistory.length - luxBars.length + idx];
                     if (pt && pt.light !== undefined) {
-                        var hPx = Math.min(44, Math.max(6, (pt.light / 2000) * 44));
+                        var hPx = Math.min(44, Math.max(6, (pt.light / 30000) * 44));
                         bar.style.height = hPx.toFixed(0) + 'px';
                         bar.style.background = 'var(--g5)';
                     }
@@ -863,7 +920,7 @@
             }
         }
 
-        // Tambah ke Tabel History AWS (Daily)
+        // Tambah ke Tabel History AWS (Daily) & perbarui agregasi Weekly / Monthly
         if (typeof window.addAwsHistoryRow === 'function') {
             var solarTxt = light ? ((light.value * 0.0079).toFixed(1) + ' W/m² · ' + (light.value * 0.0185).toFixed(0) + ' PAR') : '-';
             window.addAwsHistoryRow({
@@ -875,6 +932,125 @@
                 soil: '-'
             }, 'daily');
         }
+        syncAwsHistoryTables(false);
+    }
+
+    function formatAwsAvgRow(items, label) {
+        var tempSum = 0, tempCount = 0;
+        var humSum = 0, humCount = 0;
+        var lightSum = 0, lightCount = 0;
+        items.forEach(function (it) {
+            if (typeof it.airTemp === 'number' && !isNaN(it.airTemp) && it.airTemp > 0) {
+                tempSum += it.airTemp;
+                tempCount++;
+            }
+            if (typeof it.airHum === 'number' && !isNaN(it.airHum)) {
+                humSum += it.airHum;
+                humCount++;
+            }
+            if (typeof it.light === 'number' && !isNaN(it.light)) {
+                lightSum += it.light;
+                lightCount++;
+            }
+        });
+        var avgLight = lightCount > 0 ? (lightSum / lightCount) : null;
+        return {
+            time: label,
+            temp: tempCount > 0 ? ((tempSum / tempCount).toFixed(1) + ' °C') : '-',
+            hum: humCount > 0 ? ((humSum / humCount).toFixed(1) + '%') : '-',
+            wind: '-',
+            solar: avgLight !== null ? ((avgLight * 0.0079).toFixed(1) + ' W/m² · ' + (avgLight * 0.0185).toFixed(0) + ' PAR') : '-',
+            soil: '-'
+        };
+    }
+
+    function buildGroupedAwsRows(entries, keyFn, labelFn) {
+        var order = [];
+        var map = {};
+        entries.forEach(function (pt) {
+            var k = keyFn(pt);
+            if (!map[k]) {
+                map[k] = { key: k, label: labelFn(pt), items: [], maxTs: pt.ts };
+                order.push(map[k]);
+            }
+            map[k].items.push(pt);
+            if (pt.ts > map[k].maxTs) map[k].maxTs = pt.ts;
+        });
+        order.sort(function (a, b) { return b.maxTs - a.maxTs; });
+        return order.map(function (g) {
+            return formatAwsAvgRow(g.items, g.label + ' · Rata-rata (' + g.items.length + ' data)');
+        });
+    }
+
+    function syncAwsHistoryTables(includeDaily) {
+        if (typeof window.setAwsHistoryData !== 'function') return;
+        var now = Date.now();
+        var monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+        var pad2 = function (n) { return String(n).padStart(2, '0'); };
+
+        if (includeDaily) {
+            var dailyEntries = telemetryLog.filter(function (pt) {
+                return now - pt.ts <= 24 * 60 * 60 * 1000;
+            }).slice(-200).reverse();
+            var dailyRows = dailyEntries.map(function (pt) {
+                var solarTxt = (typeof pt.light === 'number')
+                    ? ((pt.light * 0.0079).toFixed(1) + ' W/m² · ' + (pt.light * 0.0185).toFixed(0) + ' PAR')
+                    : '-';
+                return {
+                    time: (pt.time || '--:--:--') + ' WIB',
+                    temp: (typeof pt.airTemp === 'number' && pt.airTemp > 0) ? (pt.airTemp.toFixed(1) + ' °C') : '-',
+                    hum: (typeof pt.airHum === 'number') ? (pt.airHum.toFixed(1) + '%') : '-',
+                    wind: '-',
+                    solar: solarTxt,
+                    soil: '-'
+                };
+            });
+            window.setAwsHistoryData('daily', dailyRows);
+        }
+
+        // Weekly: agregasi per hari dalam 7 hari terakhir
+        var weekWindow = telemetryLog.filter(function (pt) {
+            return now - pt.ts <= 7 * 24 * 60 * 60 * 1000;
+        });
+        var weeklyRows = buildGroupedAwsRows(
+            weekWindow,
+            function (pt) {
+                var d = new Date(pt.ts);
+                return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+            },
+            function (pt) {
+                var d = new Date(pt.ts);
+                return pad2(d.getDate()) + ' ' + monthsShort[d.getMonth()] + ' ' + d.getFullYear();
+            }
+        );
+        window.setAwsHistoryData('weekly', weeklyRows);
+
+        // Monthly: agregasi per minggu dalam 30 hari terakhir
+        var monthWindow = telemetryLog.filter(function (pt) {
+            return now - pt.ts <= 30 * 24 * 60 * 60 * 1000;
+        });
+        var getWeekStart = function (ts) {
+            var d = new Date(ts);
+            var day = d.getDay();
+            var diff = d.getDate() - day + (day === 0 ? -6 : 1);
+            return new Date(d.getFullYear(), d.getMonth(), diff);
+        };
+        var monthlyRows = buildGroupedAwsRows(
+            monthWindow,
+            function (pt) {
+                var ws = getWeekStart(pt.ts);
+                return ws.getFullYear() + '-' + pad2(ws.getMonth() + 1) + '-' + pad2(ws.getDate());
+            },
+            function (pt) {
+                var ws = getWeekStart(pt.ts);
+                var we = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + 6);
+                if (ws.getMonth() === we.getMonth()) {
+                    return pad2(ws.getDate()) + ' - ' + pad2(we.getDate()) + ' ' + monthsShort[we.getMonth()] + ' ' + we.getFullYear();
+                }
+                return pad2(ws.getDate()) + ' ' + monthsShort[ws.getMonth()] + ' - ' + pad2(we.getDate()) + ' ' + monthsShort[we.getMonth()] + ' ' + we.getFullYear();
+            }
+        );
+        window.setAwsHistoryData('monthly', monthlyRows);
     }
 
     function initMqttClient() {
@@ -958,7 +1134,7 @@
             if (window.tefaMqttClient && typeof window.tefaMqttClient.reconnect === 'function' && !window.tefaMqttClient.reconnecting) {
                 try {
                     window.tefaMqttClient.reconnect();
-                } catch (e) {}
+                } catch (e) { }
             }
             return 'queued';
         }
@@ -999,6 +1175,7 @@
         // Jika sudah ada data tersimpan sebelumnya dari localStorage, langsung tampilkan
         if (telemetryLog.length > 0) {
             renderTelemetryChart();
+            syncAwsHistoryTables(true);
         }
     }
 
