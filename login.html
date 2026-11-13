@@ -172,8 +172,14 @@
             border-radius: 12px;
             width: 412px;
             max-width: 100%;
+<<<<<<< HEAD
             height: 386px;
             padding: 34px 34px 28px;
+=======
+            height: auto;
+            min-height: 386px;
+            padding: 32px 34px 26px;
+>>>>>>> origin/main
             box-shadow: 0 4px 6px -4px rgba(27, 94, 32, 0.04), 0 10px 25px -3px rgba(27, 94, 32, 0.08);
             position: relative;
             display: flex;
@@ -258,6 +264,51 @@
             color: #94A3B8;
         }
 
+<<<<<<< HEAD
+=======
+
+        /* Toast Notification (Floating badge for success) */
+        .login-toast {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: #FFFFFF;
+            color: #1F2937;
+            padding: 12px 22px;
+            border-radius: 9999px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 99999;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .login-toast.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .login-toast.success {
+            border: 1px solid #86EFAC;
+            color: #15803D;
+            background: #F0FDF4;
+        }
+
+        .login-toast.error {
+            border: 1px solid #FCA5A5;
+            color: #B91C1C;
+            background: #FEF2F2;
+        }
+
+>>>>>>> origin/main
         /* Custom Figma Checkbox ("Ingat Saya") */
         .options-row {
             display: flex;
@@ -343,6 +394,77 @@
             transform: translateY(1px);
         }
 
+<<<<<<< HEAD
+=======
+        /* Viewer Login Secondary Option */
+        .viewer-login-wrapper {
+            margin-top: 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .viewer-divider-text {
+            font-size: 12px;
+            color: #94A3B8;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .viewer-divider-text::before,
+        .viewer-divider-text::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: #E2E8F0;
+        }
+
+        .viewer-divider-text::before {
+            margin-right: 12px;
+        }
+
+        .viewer-divider-text::after {
+            margin-left: 12px;
+        }
+
+        .btn-viewer {
+            width: 100%;
+            height: 44px;
+            background: #F8FAFC;
+            color: #2E7D32;
+            border: 1.5px solid #A5D6A7;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-decoration: none;
+            transition: all 0.15s ease;
+            box-sizing: border-box;
+        }
+
+        .btn-viewer:hover {
+            background: #E8F5E9;
+            border-color: #66BB6A;
+            color: #1B5E20;
+            box-shadow: 0 3px 10px rgba(46, 125, 50, 0.12);
+            transform: translateY(-1px);
+        }
+
+        .btn-viewer:active {
+            transform: translateY(0);
+        }
+
+>>>>>>> origin/main
         /* Sprout Badge on Top Border - Exact Figma Contact */
         .sprout-img {
             position: absolute;
@@ -373,6 +495,7 @@
             filter: drop-shadow(0 4px 12px rgba(27, 94, 32, 0.06));
         }
 
+<<<<<<< HEAD
         .bottom-action-bar {
             position: fixed;
             bottom: 18px;
@@ -440,6 +563,9 @@
             font-weight: 600;
             color: var(--green-dark);
         }
+=======
+
+>>>>>>> origin/main
 
                 /* Responsive Adjustments for Mobile & Compact Screens */
         @media (max-width: 600px) {
@@ -476,6 +602,7 @@
                 transform: translateX(-40%);
                 width: 360px;
             }
+<<<<<<< HEAD
             .bottom-action-bar {
                 bottom: 8px;
                 padding: 6px 14px;
@@ -488,6 +615,8 @@
             .bar-divider {
                 display: none;
             }
+=======
+>>>>>>> origin/main
         }
 
         /* Short screens (laptops with small viewport height e.g. < 720px) */
@@ -524,10 +653,13 @@
                 top: 270px;
                 width: 380px;
             }
+<<<<<<< HEAD
             .bottom-action-bar {
                 bottom: 6px;
                 padding: 5px 12px;
             }
+=======
+>>>>>>> origin/main
         }
     </style>
 </head>
@@ -580,7 +712,11 @@
                     <!-- Field 1: Username / Email -->
                     <div class="form-group">
                         <label for="usernameInput" class="form-label">Username / Email</label>
+<<<<<<< HEAD
                         <div class="input-box">
+=======
+                        <div class="input-box" id="usernameBox">
+>>>>>>> origin/main
                             <span class="input-icon-left" aria-hidden="true">
                                 <svg width="18" height="18" viewBox="803 489 16 18" fill="none" stroke="#2E7D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M814 494.25C814 495.907 812.657 497.25 811 497.25C809.343 497.25 808 495.907 808 494.25C808 492.593 809.343 491.25 811 491.25C812.657 491.25 814 492.593 814 494.25Z" />
@@ -601,7 +737,11 @@
                     <!-- Field 2: Kata Sandi -->
                     <div class="form-group">
                         <label for="passwordInput" class="form-label">Kata Sandi</label>
+<<<<<<< HEAD
                         <div class="input-box with-right-icon">
+=======
+                        <div class="input-box with-right-icon" id="passwordBox">
+>>>>>>> origin/main
                             <span class="input-icon-left" aria-hidden="true">
                                 <svg width="18" height="18" viewBox="803 597 16 18" fill="none" stroke="#2E7D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M805.75 605.25H816.25C817.078 605.25 817.75 605.922 817.75 606.75V612C817.75 612.828 817.078 613.5 816.25 613.5H805.75C804.922 613.5 804.25 612.828 804.25 612V606.75C804.25 605.922 804.922 605.25 805.75 605.25Z" />
@@ -631,6 +771,10 @@
                         </div>
                     </div>
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> origin/main
                     <!-- Remember Me -->
                     <div class="options-row">
                         <label class="custom-checkbox-container" for="rememberMeCheck">
@@ -648,6 +792,21 @@
                     <button type="submit" id="submitBtn" class="btn-submit">
                         <span id="btnText">Login</span>
                     </button>
+<<<<<<< HEAD
+=======
+
+                    <!-- Viewer Option -->
+                    <div class="viewer-login-wrapper">
+                        <div class="viewer-divider-text">atau</div>
+                        <a href="indexViewer.html" id="viewerLoginBtn" class="btn-viewer">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            <span>Masuk sebagai Viewer</span>
+                        </a>
+                    </div>
+>>>>>>> origin/main
                 </form>
             </div>
 
@@ -656,6 +815,7 @@
         </div>
     </main>
 
+<<<<<<< HEAD
     <!-- Floating Clean Glass Bar (Viewer Access & Demo Credentials) -->
     <footer class="bottom-action-bar">
         <a href="indexViewer.html" class="link-viewer">
@@ -671,6 +831,8 @@
         </div>
     </footer>
 
+=======
+>>>>>>> origin/main
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const loginForm = document.getElementById('loginForm');
@@ -683,7 +845,12 @@
             const btnText = document.getElementById('btnText');
             const toast = document.getElementById('loginToast');
             const card = document.getElementById('cardElement');
+<<<<<<< HEAD
             const demoChip = document.getElementById('demoChip');
+=======
+            const usernameBox = document.getElementById('usernameBox');
+            const passwordBox = document.getElementById('passwordBox');
+>>>>>>> origin/main
 
             // Restore remembered username
             const savedUser = localStorage.getItem('tefa_saved_username');
@@ -693,6 +860,7 @@
                 passwordInput.focus();
             }
 
+<<<<<<< HEAD
             // Demo chip autofill
             if (demoChip) {
                 demoChip.addEventListener('click', () => {
@@ -702,6 +870,8 @@
                 });
             }
 
+=======
+>>>>>>> origin/main
             // Password visibility toggle
             let isVisible = false;
                     // Toggle Password Visibility (Eye with slash vs Open Eye)
@@ -728,6 +898,25 @@
                 }, 3500);
             }
 
+<<<<<<< HEAD
+=======
+            const viewerLoginBtn = document.getElementById('viewerLoginBtn');
+            if (viewerLoginBtn) {
+                viewerLoginBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    sessionStorage.setItem('tefa_auth_user', JSON.stringify({
+                        username: 'Pengunjung',
+                        role: 'viewer',
+                        loginTime: new Date().toISOString()
+                    }));
+                    showToast('Login berhasil! Mengalihkan ke Dashboard Viewer...', 'success');
+                    setTimeout(() => {
+                        window.location.href = 'indexViewer.html';
+                    }, 400);
+                });
+            }
+
+>>>>>>> origin/main
             // Form Submit Authentication
             loginForm.addEventListener('submit', (e) => {
                 e.preventDefault();
@@ -736,7 +925,12 @@
                 const password = passwordInput.value;
 
                 if (!username || !password) {
+<<<<<<< HEAD
                     showToast('Harap lengkapi Username dan Kata Sandi.');
+=======
+                    if (!username) usernameInput.focus();
+                    else passwordInput.focus();
+>>>>>>> origin/main
                     return;
                 }
 
@@ -751,6 +945,14 @@
                         (username.toLowerCase() === 'tefa' && password === 'mappi32')
                     );
 
+<<<<<<< HEAD
+=======
+                    const isValidViewer = (
+                        (username.toLowerCase() === 'viewer' && (password === 'viewer' || password === 'viewer123')) ||
+                        (username.toLowerCase() === 'pengunjung' && (password === 'pengunjung' || password === '123456' || password === 'viewer'))
+                    );
+
+>>>>>>> origin/main
                     if (isValidAdmin) {
                         showToast('Login berhasil! Mengalihkan ke Dashboard Admin...', 'success');
 
@@ -769,16 +971,42 @@
                         setTimeout(() => {
                             window.location.href = 'indexAdmin.html';
                         }, 600);
+<<<<<<< HEAD
+=======
+                    } else if (isValidViewer) {
+                        showToast('Login berhasil! Mengalihkan ke Dashboard Viewer...', 'success');
+
+                        if (rememberMeCheck.checked) {
+                            localStorage.setItem('tefa_saved_username', username);
+                        } else {
+                            localStorage.removeItem('tefa_saved_username');
+                        }
+
+                        sessionStorage.setItem('tefa_auth_user', JSON.stringify({
+                            username: username,
+                            role: 'viewer',
+                            loginTime: new Date().toISOString()
+                        }));
+
+                        setTimeout(() => {
+                            window.location.href = 'indexViewer.html';
+                        }, 600);
+>>>>>>> origin/main
                     } else {
                         submitBtn.disabled = false;
                         btnText.textContent = 'Login';
                         submitBtn.style.opacity = '1';
+<<<<<<< HEAD
                         showToast('Username atau Kata Sandi salah. Gunakan admin / admin123', 'error');
 
                         card.style.animation = 'none';
                         setTimeout(() => {
                             card.style.animation = 'cardShake 0.4s ease';
                         }, 10);
+=======
+                        passwordInput.value = '';
+                        passwordInput.focus();
+>>>>>>> origin/main
                     }
                 }, 350);
             });
