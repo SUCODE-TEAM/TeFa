@@ -5,6 +5,13 @@
     var MQTT_CONFIG = {
         brokerUrl: 'wss://broker.emqx.io:8084/mqtt',
         topic: 'tefa/hidroponik/sensor',
+        topics: [
+            'tefa/hidroponik/sensor',
+            'tefa/smkn2yogyakarta/data',
+            'tefa/sensor',
+            'tefa/data',
+            'tefa/#'
+        ],
         publishTopic: 'tefa/hidroponik/aktuator',
         options: {
             clientId: 'tefa_web_' + Math.random().toString(16).slice(2, 10),
@@ -599,6 +606,93 @@
         return null;
     }
 
+    function normalizePayload(payload) {
+        if (!payload || typeof payload !== 'object') return null;
+
+        // Unpack if wrapped in data or d
+        if (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
+            payload = Object.assign({}, payload, payload.data);
+        } else if (payload.d && typeof payload.d === 'object' && !Array.isArray(payload.d)) {
+            payload = Object.assign({}, payload, payload.d);
+        }
+
+        // 1. If already standard array format
+        if (Array.isArray(payload.sensors)) {
+            return payload;
+        }
+
+        // 2. If flat JSON format (common in MQTTX / manual publish)
+        var normalizedSensors = [];
+
+        function getVal(keys) {
+            for (var i = 0; i < keys.length; i++) {
+                var k = keys[i];
+                if (payload[k] !== undefined && payload[k] !== null && payload[k] !== '') {
+                    var num = Number(payload[k]);
+                    if (!isNaN(num)) return num;
+                }
+            }
+            return null;
+        }
+
+        // WiFi
+        var wifiVal = getVal(['wifi', 'wifi_rssi', 'rssi', 'kekuatan_wiFi', 'signal', 'wifi_speed']);
+        if (wifiVal !== null) {
+            normalizedSensors.push({ id: 'kekuatan_wiFi', value: wifiVal, satuan: 'dBm' });
+        }
+
+        // pH
+        var phVal = getVal(['ph', 'pH', 'PH', 'ph_value', '001pH', 'sensor_ph']);
+        if (phVal !== null) {
+            normalizedSensors.push({ id: '001pH', value: phVal, satuan: 'pH' });
+        }
+
+        // EC / TDS
+        var ecVal = getVal(['ec', 'EC', 'ec_value', '002EC', 'sensor_ec']);
+        var tdsVal = getVal(['tds', 'TDS', 'ppm', 'PPM']);
+        if (ecVal !== null) {
+            normalizedSensors.push({ id: '002EC', value: ecVal, satuan: 'mS/cm' });
+        } else if (tdsVal !== null) {
+            var convertedEc = tdsVal > 15 ? tdsVal / 640 : tdsVal;
+            normalizedSensors.push({ id: '002EC', value: convertedEc, satuan: 'mS/cm' });
+        }
+
+        // Light / Lux
+        var lightVal = getVal(['light', 'lux', 'Lux', 'bh1750', 'cahaya', '003bh1750', 'intensitas_cahaya']);
+        if (lightVal !== null) {
+            normalizedSensors.push({ id: '003bh1750', value: lightVal, satuan: 'Lux' });
+        }
+
+        // Air Temperature
+        var airTempVal = getVal(['air_temp', 'airTemp', 'temp', 'temperature', 'suhu_udara', 'suhu', '004aht20_temp']);
+        if (airTempVal !== null) {
+            normalizedSensors.push({ id: '004aht20_temp', value: airTempVal, satuan: '°C' });
+        }
+
+        // Air Humidity
+        var airHumVal = getVal(['hum', 'humidity', 'air_hum', 'airHum', 'kelembaban', '004aht20_hum']);
+        if (airHumVal !== null) {
+            normalizedSensors.push({ id: '004aht20_hum', value: airHumVal, satuan: '%' });
+        }
+
+        // Water Temperature
+        var waterTempVal = getVal(['water_temp', 'waterTemp', 'temp_water', 'suhu_air', '005sensorair', 'tandon_temp', 'water_temperature']);
+        if (waterTempVal !== null) {
+            normalizedSensors.push({ id: '005sensorair', value: waterTempVal, satuan: '°C' });
+        } else if (airTempVal !== null && normalizedSensors.length > 0) {
+            normalizedSensors.push({ id: '005sensorair', value: Math.max(18, airTempVal - 1.5), satuan: '°C' });
+        }
+
+        if (normalizedSensors.length === 0) return null;
+
+        return {
+            device_id: payload.device_id || payload.clientId || 'MQTTX',
+            timestamp: payload.timestamp || payload.time || new Date().toISOString(),
+            sensors: normalizedSensors,
+            system_status: payload.system_status || { pompa: payload.pompa || 'Standby' }
+        };
+    }
+
     function updateDashboardUI(payload) {
         if (!payload || !Array.isArray(payload.sensors)) return;
 
@@ -636,6 +730,7 @@
         var overallStatus = (isPhWarn || isWaterWarn || isHumWarn) ? 'Warning' : 'Normal';
 
         // 1. Update Hero Uptime & Hardware Health
+        setConnectionUI('Online', 'Live Data (' + wibTime + ')', true);
         var uptimeEl = document.getElementById('uptime');
         if (uptimeEl) uptimeEl.textContent = wibTime + ' WIB';
 
@@ -1065,16 +1160,18 @@
         var client = mqtt.connect(MQTT_CONFIG.brokerUrl, MQTT_CONFIG.options);
 
         client.on('connect', function () {
-            console.log('[TeFa MQTT] Terhubung ke broker.emqx.io! Subscribe topik: ' + MQTT_CONFIG.topic);
+            console.log('[TeFa MQTT] Terhubung ke broker.emqx.io! Mendaftarkan subscriptions...');
             setConnectionUI('Online', 'Menunggu data...', true);
 
-            client.subscribe(MQTT_CONFIG.topic, { qos: 0 }, function (err) {
-                if (err) {
-                    console.error('[TeFa MQTT] Gagal subscribe:', err);
-                    setConnectionUI('Error', 'Gagal subscribe', false);
-                } else {
-                    console.log('[TeFa MQTT] Berhasil subscribe ke ' + MQTT_CONFIG.topic);
-                }
+            var topics = Array.isArray(MQTT_CONFIG.topics) ? MQTT_CONFIG.topics : [MQTT_CONFIG.topic];
+            topics.forEach(function (top) {
+                client.subscribe(top, { qos: 0 }, function (err) {
+                    if (err) {
+                        console.error('[TeFa MQTT] Gagal subscribe ' + top + ':', err);
+                    } else {
+                        console.log('[TeFa MQTT] Berhasil subscribe ke ' + top);
+                    }
+                });
             });
 
             if (pendingSettingsPayload !== null) {
@@ -1086,12 +1183,23 @@
 
         client.on('message', function (topic, message) {
             try {
+                // Abaikan pesan aktuator atau control dari web
+                if (topic.indexOf('aktuator') !== -1 || topic.indexOf('control') !== -1) {
+                    return;
+                }
+
                 var raw = message.toString();
                 var data = JSON.parse(raw);
-                console.log('[TeFa MQTT] Data diterima dari ' + topic + ':', data);
-                updateDashboardUI(data);
+                console.log('[TeFa MQTT] Pesan diterima dari [' + topic + ']:', data);
+
+                var normalized = normalizePayload(data);
+                if (normalized) {
+                    updateDashboardUI(normalized);
+                } else {
+                    console.warn('[TeFa MQTT] Format data belum sesuai (harus ada nilai sensor seperti ph, ec, temp):', data);
+                }
             } catch (e) {
-                console.error('[TeFa MQTT] Gagal parsing JSON:', e);
+                console.error('[TeFa MQTT] Gagal parsing JSON pesan dari ' + topic + ':', e);
             }
         });
 
@@ -1123,6 +1231,26 @@
             }
         });
     }
+
+    
+    window.simulateMqttData = function (customData) {
+        var dummy = customData || {
+            ph: 6.85,
+            ec: 1.48,
+            temp: 28.2,
+            hum: 68.5,
+            water_temp: 25.4,
+            light: 550,
+            wifi: -58
+        };
+        var normalized = normalizePayload(dummy);
+        if (normalized) {
+            updateDashboardUI(normalized);
+            console.log('[TeFa MQTT] Simulasi dummy berhasil diterapkan:', normalized);
+            return 'OK';
+        }
+        return 'Invalid payload';
+    };
 
     window.publishMqttSettings = function (payload) {
         if (window.tefaMqttClient && window.tefaMqttClient.connected) {
