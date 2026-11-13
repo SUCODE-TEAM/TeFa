@@ -245,25 +245,19 @@ Digunakan pada tabel AWS Tabs (Daily, Weekly, Monthly):
 
 ---
 
-### D. Perintah Kontrol Relay (Web Admin $\rightarrow$ Aktuator / ESP32)
-Dikirim saat Admin mengklik toggle atau tombol *All ON / All OFF* di `indexAdmin.html`:
+### D. Publish Pengaturan & Kontrol Pompa (Web Admin $\rightarrow$ MQTT Broker $\rightarrow$ ESP32)
+Dikirim saat Admin menekan tombol **SAVE** pada modal Setting (`indexAdmin.html`) ke topik `tefa/smkn2yogyakarta/control`:
 
 ```json
 {
-  "action": "set_relay",
-  "relay_id": 1,
-  "state": "on",
-  "command_by": "admin",
-  "timestamp": "2026-11-13T08:45:30+07:00"
-}
-```
-Atau kontrol massal (Batch/All):
-```json
-{
-  "action": "set_all_relays",
-  "state": "off",
-  "command_by": "admin",
-  "timestamp": "2026-11-13T08:46:00+07:00"
+  "pompa": "on",
+  "threshold": {
+    "ph_min": 6.0,
+    "ph_max": 7.5,
+    "ec_target": 1.5,
+    "ph_up_dose": 5,
+    "ph_down_dose": 5
+  }
 }
 ```
 
