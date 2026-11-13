@@ -289,67 +289,79 @@
         }
     }, { passive: true });
 
-    // Clean Scroll Reveal Animation
+    // AOS (Animate On Scroll) Initialization & Staggered Card Setup
     function initScrollReveal() {
-        var revealSelectors = [
-            '.hero',
-            '.row2',
-            '.row3',
-            '.relay-sec',
-            '#relay',
-            '.card.chart',
-            '#telemetri',
-            '#hardware',
-            '.hwcards',
-            '.awsbar',
-            '.awsgrid'
-        ];
-
-        var revealElements = [];
-        revealSelectors.forEach(function (sel) {
+        ['.row2', '.row3', '.relay-sec', '.hwcards', '.awsgrid'].forEach(function (sel) {
             document.querySelectorAll(sel).forEach(function (el) {
-                if (!el.classList.contains('scroll-reveal')) {
-                    el.classList.add('scroll-reveal');
-                    revealElements.push(el);
-                }
+                el.removeAttribute('data-aos');
+                el.removeAttribute('data-aos-delay');
+                el.removeAttribute('data-aos-duration');
             });
         });
 
-        if ('IntersectionObserver' in window) {
-            var observer = new IntersectionObserver(function (entries, obs) {
-                entries.forEach(function (entry) {
-                    if (entry.isIntersecting) {
-                        entry.target.classList.add('revealed');
-                        obs.unobserve(entry.target);
-                    }
-                });
-            }, {
-                threshold: 0.05,
-                rootMargin: '60px 0px 60px 0px'
-            });
+        function applyAOS(el, anim, delay) {
+            if (!el) return;
+            if (!el.getAttribute('data-aos')) {
+                el.setAttribute('data-aos', anim || 'fade-up');
+            }
+            if (delay && !el.getAttribute('data-aos-delay')) {
+                el.setAttribute('data-aos-delay', String(delay));
+            }
+        }
 
-            revealElements.forEach(function (el) {
-                var rect = el.getBoundingClientRect();
-                if (rect.top < window.innerHeight + 60 && rect.bottom > -60) {
-                    el.classList.add('revealed');
-                } else {
-                    observer.observe(el);
-                }
-            });
+        document.querySelectorAll('.hero').forEach(function (el) {
+            applyAOS(el, 'fade-down', 0);
+        });
 
-            window.addEventListener('scroll', function () {
-                revealElements.forEach(function (el) {
-                    if (!el.classList.contains('revealed')) {
-                        var rect = el.getBoundingClientRect();
-                        if (rect.top < window.innerHeight + 60 && rect.bottom > -60) {
-                            el.classList.add('revealed');
-                        }
-                    }
-                });
-            }, { passive: true });
-        } else {
-            revealElements.forEach(function (el) {
-                el.classList.add('revealed');
+        document.querySelectorAll('.row2 .weather').forEach(function (el) {
+            applyAOS(el, 'fade-up', 60);
+        });
+        document.querySelectorAll('.row2 .sensor').forEach(function (el, idx) {
+            applyAOS(el, 'fade-up', 100 + idx * 80);
+        });
+
+        document.querySelectorAll('.row3 > .card').forEach(function (el, idx) {
+            applyAOS(el, 'fade-up', idx * 100);
+        });
+
+        document.querySelectorAll('.relay-head').forEach(function (el) {
+            applyAOS(el, 'fade-up', 0);
+        });
+        document.querySelectorAll('.relay-card').forEach(function (el, idx) {
+            applyAOS(el, 'zoom-in-up', (idx % 4) * 70);
+        });
+
+        document.querySelectorAll('.card.chart, .card.tcard').forEach(function (el, idx) {
+            applyAOS(el, 'fade-up', idx * 80);
+        });
+
+        document.querySelectorAll('#hardware, .awsbar').forEach(function (el) {
+            applyAOS(el, 'fade-up', 0);
+        });
+
+        document.querySelectorAll('.hwcards .hwc').forEach(function (el, idx) {
+            applyAOS(el, 'fade-up', idx * 75);
+        });
+
+        document.querySelectorAll('.awsgrid .awsc').forEach(function (el, idx) {
+            applyAOS(el, 'fade-up', (idx % 2) * 90);
+        });
+
+        document.querySelectorAll('footer').forEach(function (el) {
+            applyAOS(el, 'fade-up', 0);
+        });
+
+        if (window.AOS) {
+            window.AOS.init({
+                duration: 750,
+                easing: 'ease-out-cubic',
+                once: false,
+                mirror: true,
+                offset: 50,
+                anchorPlacement: 'top-bottom'
+            });
+            window.addEventListener('load', function () {
+                if (window.AOS) window.AOS.refresh();
             });
         }
     }
@@ -555,7 +567,7 @@
                 var originalText = saveBtn.textContent;
                 if (publishResult === 'sent' || publishResult === true) {
                     saveBtn.textContent = 'SAVED & SENT ✓';
-                    saveBtn.style.background = '#2E7D32';
+                    saveBtn.style.background = '#1B4332';
                 } else if (publishResult === 'queued') {
                     saveBtn.textContent = 'SAVED (MENUNGGU MQTT)';
                     saveBtn.style.background = '#E65100';
@@ -565,7 +577,7 @@
                 }
                 setTimeout(function () {
                     saveBtn.textContent = originalText;
-                    saveBtn.style.background = '#1B5E20';
+                    saveBtn.style.background = '#0D2818';
                     closeModal();
                 }, 800);
             });
@@ -1344,4 +1356,97 @@
             }
         });
     });
+})();
+
+/* ================= PARALLAX CURSOR EFFECT ================= */
+(function () {
+    function initParallaxCursorEffect() {
+        if (!window.matchMedia || !window.matchMedia('(pointer: fine)').matches) return;
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        if (document.body.dataset.parallaxInit === '1') return;
+        document.body.dataset.parallaxInit = '1';
+
+        function attachCardParallax(el, options) {
+            const maxTilt = options.maxTilt || 0;
+            const hoverLift = options.hoverLift || 0;
+            const baseTransition = options.baseTransition || 'box-shadow .25s ease, transform .38s cubic-bezier(0.22, 1, 0.36, 1)';
+            el.classList.add('parallax-card');
+
+            el.addEventListener('mousemove', function (e) {
+                const rect = el.getBoundingClientRect();
+                if (!rect.width || !rect.height) return;
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                el.style.setProperty('--mx', `${x.toFixed(1)}px`);
+                el.style.setProperty('--my', `${y.toFixed(1)}px`);
+                el.classList.add('is-tilting');
+
+                if (maxTilt > 0) {
+                    const rx = ((y - rect.height / 2) / (rect.height / 2)) * -maxTilt;
+                    const ry = ((x - rect.width / 2) / (rect.width / 2)) * maxTilt;
+                    el.style.transition = 'box-shadow .25s ease, transform .08s ease-out';
+                    el.style.transform = `perspective(1000px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) translateY(${hoverLift}px)`;
+                }
+            }, { passive: true });
+
+            el.addEventListener('mouseleave', function () {
+                el.classList.remove('is-tilting');
+                if (maxTilt > 0) {
+                    el.style.transition = baseTransition;
+                    el.style.transform = '';
+                    setTimeout(function () {
+                        if (!el.classList.contains('is-tilting')) {
+                            el.style.transition = '';
+                        }
+                    }, 380);
+                }
+            });
+        }
+
+        document.querySelectorAll('.hero, .weather, .row3 > .card, .awsbar').forEach(function (el) {
+            attachCardParallax(el, { maxTilt: 2.2, hoverLift: -2 });
+        });
+
+        document.querySelectorAll('.sensor, .hwc, .awsc').forEach(function (el) {
+            attachCardParallax(el, { maxTilt: 3.8, hoverLift: -2 });
+        });
+
+        document.querySelectorAll('.relay-card').forEach(function (el) {
+            attachCardParallax(el, { maxTilt: 3.8, hoverLift: -2 });
+        });
+
+        document.querySelectorAll('.card.chart, .card.tcard').forEach(function (el) {
+            attachCardParallax(el, { maxTilt: 0 });
+        });
+
+        document.querySelectorAll('.notif-btn, .ai-assistant-btn, .gear').forEach(function (btn) {
+            const icon = btn.querySelector('svg');
+            btn.addEventListener('mousemove', function (e) {
+                const rect = btn.getBoundingClientRect();
+                const dx = e.clientX - (rect.left + rect.width / 2);
+                const dy = e.clientY - (rect.top + rect.height / 2);
+                btn.style.transition = 'transform .1s ease-out, box-shadow .22s ease, background .22s ease';
+                btn.style.transform = `translate3d(${(dx * 0.22).toFixed(2)}px, ${(dy * 0.22).toFixed(2)}px, 0)`;
+                if (icon) {
+                    icon.style.transition = 'transform .1s ease-out';
+                    icon.style.transform = `translate3d(${(dx * 0.12).toFixed(2)}px, ${(dy * 0.12).toFixed(2)}px, 0)`;
+                }
+            }, { passive: true });
+
+            btn.addEventListener('mouseleave', function () {
+                btn.style.transition = 'transform .35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow .22s ease, background .22s ease';
+                btn.style.transform = '';
+                if (icon) {
+                    icon.style.transition = 'transform .35s cubic-bezier(0.22, 1, 0.36, 1)';
+                    icon.style.transform = '';
+                }
+            });
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initParallaxCursorEffect);
+    } else {
+        initParallaxCursorEffect();
+    }
 })();

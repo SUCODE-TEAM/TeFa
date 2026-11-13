@@ -241,14 +241,14 @@
             '#telemetri .legend span { cursor: pointer; user-select: none; transition: opacity 0.2s ease; }',
             '#telemetri .legend span.dimmed { opacity: 0.35; text-decoration: line-through; }',
             '.chart-hover-layer { position: absolute; pointer-events: none; z-index: 5; overflow: visible; }',
-            '.chart-crosshair { position: absolute; top: 0; bottom: 0; width: 1.5px; background: repeating-linear-gradient(to bottom, rgba(27,94,32,0.45) 0 4px, transparent 4px 8px); opacity: 0; transition: left 0.08s ease-out, opacity 0.15s ease; }',
-            '.chart-dot { position: absolute; width: 11px; height: 11px; border-radius: 50%; border: 2.5px solid #fff; transform: translate(-50%, -50%); opacity: 0; transition: left 0.08s ease-out, top 0.08s ease-out, opacity 0.15s ease; box-shadow: 0 2px 6px rgba(0,0,0,0.22); }',
-            '.chart-tooltip { position: absolute; min-width: 185px; background: rgba(255,255,255,0.96); backdrop-filter: blur(8px); border: 1px solid #C8E6C9; border-radius: 12px; padding: 10px 13px; box-shadow: 0 10px 26px rgba(27,94,32,0.14); font-size: 12px; color: #1B3B1E; pointer-events: none; z-index: 10; opacity: 0; transition: left 0.08s ease-out, top 0.08s ease-out, opacity 0.15s ease; }',
-            '.chart-tooltip-time { font-weight: 700; font-size: 11px; color: #2E7D32; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid #E8F5E9; letter-spacing: 0.3px; }',
+            '.chart-crosshair { position: absolute; top: 0; bottom: 0; width: 1.5px; background: repeating-linear-gradient(to bottom, rgba(13,40,24,0.45) 0 4px, transparent 4px 8px); opacity: 0; transition: left 0.08s ease-out, opacity 0.15s ease; }',
+            '.chart-dot { position: absolute; width: 11px; height: 11px; border-radius: 50%; border: 2.5px solid #fff; transform: translate(-50%, -50%); opacity: 0; transition: left 0.08s ease-out, top 0.08s ease-out, opacity 0.15s ease; box-shadow: 0 2px 6px rgba(2,2,2,0.22); }',
+            '.chart-tooltip { position: absolute; min-width: 185px; background: rgba(255,255,255,0.96); backdrop-filter: blur(10px); border: none; border-radius: 12px; padding: 10px 13px; box-shadow: 0 16px 38px rgba(9,24,15,0.20), 0 4px 12px rgba(2,2,2,0.08); font-size: 12px; color: #0D2818; pointer-events: none; z-index: 10; opacity: 0; transition: left 0.08s ease-out, top 0.08s ease-out, opacity 0.15s ease; }',
+            '.chart-tooltip-time { font-weight: 700; font-size: 11px; color: #0D2818; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid #EBF0ED; letter-spacing: 0.3px; }',
             '.chart-tooltip-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 3px 0; font-weight: 500; }',
-            '.chart-tooltip-label { display: flex; align-items: center; gap: 6px; color: #4A664D; }',
+            '.chart-tooltip-label { display: flex; align-items: center; gap: 6px; color: #4A5D52; }',
             '.chart-tooltip-swatch { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }',
-            '.chart-tooltip-val { font-weight: 700; color: #1B3B1E; font-variant-numeric: tabular-nums; }'
+            '.chart-tooltip-val { font-weight: 700; color: #0D2818; font-variant-numeric: tabular-nums; }'
         ].join('\n');
         document.head.appendChild(style);
     }
@@ -335,9 +335,9 @@
             return p;
         }
 
-        var pathEc = makeLine('#1B5E20');
-        var pathPh = makeLine('#66BB6A');
-        var pathTemp = makeLine('#A5D6A7');
+        var pathEc = makeLine('#0D2818');
+        var pathPh = makeLine('#1B4332');
+        var pathTemp = makeLine('#6B9080');
 
         svg.appendChild(areaPath);
         svg.appendChild(pathTemp);
@@ -355,15 +355,15 @@
 
         var dotEc = document.createElement('div');
         dotEc.className = 'chart-dot';
-        dotEc.style.background = '#1B5E20';
+        dotEc.style.background = '#0D2818';
 
         var dotPh = document.createElement('div');
         dotPh.className = 'chart-dot';
-        dotPh.style.background = '#66BB6A';
+        dotPh.style.background = '#1B4332';
 
         var dotTemp = document.createElement('div');
         dotTemp.className = 'chart-dot';
-        dotTemp.style.background = '#A5D6A7';
+        dotTemp.style.background = '#6B9080';
 
         var tooltip = document.createElement('div');
         tooltip.className = 'chart-tooltip';
@@ -423,13 +423,13 @@
 
             var rowsHtml = ['<div class="chart-tooltip-time">' + pt.time + ' WIB</div>'];
             if (chartState.visibleSeries.ec) {
-                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#1B5E20"></i>EC / TDS</span><span class="chart-tooltip-val">' + (pt.ec || 0).toFixed(2) + ' mS/cm</span></div>');
+                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#0D2818"></i>EC / TDS</span><span class="chart-tooltip-val">' + (pt.ec || 0).toFixed(2) + ' mS/cm</span></div>');
             }
             if (chartState.visibleSeries.ph) {
-                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#66BB6A"></i>pH</span><span class="chart-tooltip-val">' + (pt.ph || 0).toFixed(2) + ' pH</span></div>');
+                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#1B4332"></i>pH</span><span class="chart-tooltip-val">' + (pt.ph || 0).toFixed(2) + ' pH</span></div>');
             }
             if (chartState.visibleSeries.temp) {
-                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#A5D6A7"></i>Water Temp</span><span class="chart-tooltip-val">' + (pt.waterTemp || 0).toFixed(1) + ' °C</span></div>');
+                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#6B9080"></i>Water Temp</span><span class="chart-tooltip-val">' + (pt.waterTemp || 0).toFixed(1) + ' °C</span></div>');
             }
             tooltip.innerHTML = rowsHtml.join('');
 
@@ -524,7 +524,7 @@
         if (weatherDesc) {
             if (isOnline) {
                 weatherDesc.textContent = 'Broker terhubung · ' + subText;
-                weatherDesc.style.color = '#2E7D32';
+                weatherDesc.style.color = '#1B4332';
             } else {
                 weatherDesc.textContent = subText;
                 weatherDesc.style.color = stateText === 'Connecting' ? '#E65100' : 'var(--red)';
@@ -765,7 +765,7 @@
         }
         if (weatherDescEl) {
             weatherDescEl.textContent = 'Terhubung · ' + (payload.device_id || 'ESP32');
-            weatherDescEl.style.color = '#2E7D32';
+            weatherDescEl.style.color = '#1B4332';
         }
         if (airHum && wstatsHumEl) {
             wstatsHumEl.innerHTML = '<small>Humidity</small>' + airHum.value.toFixed(1) + '%';
@@ -782,7 +782,7 @@
                 if (phBar) phBar.style.width = Math.min(100, Math.max(0, (ph.value / 14) * 100)).toFixed(1) + '%';
                 if (phSt) {
                     phSt.textContent = isPhWarn ? 'Warning' : 'Optimal';
-                    phSt.style.color = isPhWarn ? '#E65100' : '#2E7D32';
+                    phSt.style.color = isPhWarn ? '#E65100' : '#1B4332';
                 }
             }
             if (ec) {
@@ -793,7 +793,7 @@
                 if (ecBar) ecBar.style.width = Math.min(100, Math.max(5, (ec.value / 3.0) * 100)).toFixed(1) + '%';
                 if (ecSt) {
                     ecSt.textContent = 'Optimal';
-                    ecSt.style.color = '#2E7D32';
+                    ecSt.style.color = '#1B4332';
                 }
             }
             if (light) {
@@ -804,7 +804,7 @@
                 if (lxBar) lxBar.style.width = Math.min(100, Math.max(5, (light.value / 30000) * 100)).toFixed(1) + '%';
                 if (lxSt) {
                     lxSt.textContent = light.value > 200 ? 'Terang' : 'Redup';
-                    lxSt.style.color = '#2E7D32';
+                    lxSt.style.color = '#1B4332';
                 }
             }
         }
@@ -835,7 +835,7 @@
             if (minmaxSpans.length >= 3) {
                 minmaxSpans[0].textContent = 'Min: ' + minWaterTemp.toFixed(1) + '°C';
                 minmaxSpans[1].textContent = isWaterWarn ? 'Status: Warning' : 'Status: Normal';
-                minmaxSpans[1].style.color = isWaterWarn ? '#E65100' : '#2E7D32';
+                minmaxSpans[1].style.color = isWaterWarn ? '#E65100' : '#1B4332';
                 minmaxSpans[2].textContent = 'Max: ' + maxWaterTemp.toFixed(1) + '°C';
             }
         }
@@ -905,8 +905,8 @@
             if (airBadge && (airTemp || airHum)) {
                 airBadge.textContent = 'Online';
                 airBadge.classList.remove('badge-offline');
-                airBadge.style.background = '#E8F5E9';
-                airBadge.style.color = '#2E7D32';
+                airBadge.style.background = '#EBF0ED';
+                airBadge.style.color = '#1B4332';
                 airBadge.style.padding = '4px 10px';
                 airBadge.style.borderRadius = '99px';
                 airBadge.style.fontSize = '12px';
@@ -945,8 +945,8 @@
             if (luxBadge && light) {
                 luxBadge.textContent = 'Online';
                 luxBadge.classList.remove('badge-offline');
-                luxBadge.style.background = '#E8F5E9';
-                luxBadge.style.color = '#2E7D32';
+                luxBadge.style.background = '#EBF0ED';
+                luxBadge.style.color = '#1B4332';
                 luxBadge.style.padding = '4px 10px';
                 luxBadge.style.borderRadius = '99px';
                 luxBadge.style.fontSize = '12px';
