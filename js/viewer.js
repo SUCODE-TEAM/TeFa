@@ -57,69 +57,49 @@
                 });
             }
     
-            // Scrollspy for navigation links
-            var navLinks = document.querySelectorAll('.nav-links a');
-            var spySections = [
-                { id: 'top', link: navLinks[0] },
-                { id: 'relay', link: navLinks[1] },
-                { id: 'telemetri', link: navLinks[2] },
-                { id: 'hardware', link: navLinks[3] },
-                { id: 'aws', link: navLinks[4] }
-            ];
-
-            window.addEventListener('scroll', function() {
-                var topRow = document.querySelector('.top-row');
-                if (topRow) {
-                    if (window.scrollY > 15) {
-                        topRow.classList.add('scrolled');
-                    } else {
-                        topRow.classList.remove('scrolled');
-                    }
-                }
-                var pos = window.scrollY + 200;
-                var currentId = 'top';
-                spySections.forEach(function(sec) {
-                    var el = document.getElementById(sec.id);
-                    if (el && el.offsetTop <= pos) {
-                        currentId = sec.id;
-                    }
-                });
-                spySections.forEach(function(sec) {
-                    if (sec.link) {
-                        if (sec.id === currentId) {
-                            sec.link.classList.add('active');
-                        } else {
-                            sec.link.classList.remove('active');
-                        }
-                    }
-                });
-            });
-
-            // AI Assistant Popup Logic (Circle Expand Animation & Chat)
-                        // Smooth Nav Indicator & Scrollspy Logic
+            // Smooth Nav Indicator & Unified Scrollspy Logic
             var navContainer = document.getElementById('navLinksContainer');
             var navIndicator = document.getElementById('navIndicator');
             var navLinks = document.querySelectorAll('.nav-links a');
             var isUserClicking = false;
             var clickTimer = null;
+            var spySectionIds = ['top', 'relay', 'telemetri', 'hardware', 'aws'];
+            var currentActiveSectionId = 'top';
 
             function moveNavIndicator(targetLink) {
                 if (!navIndicator || !navContainer) return;
+                if (navContainer.offsetParent === null) return; // Hidden on mobile/tablet
                 var activeLink = targetLink || navContainer.querySelector('a.active') || navLinks[0];
                 if (activeLink) {
                     var cRect = navContainer.getBoundingClientRect();
                     var lRect = activeLink.getBoundingClientRect();
-                    navIndicator.style.left = (lRect.left - cRect.left) + 'px';
-                    navIndicator.style.width = lRect.width + 'px';
+                    if (lRect.width > 0) {
+                        navIndicator.style.left = (lRect.left - cRect.left) + 'px';
+                        navIndicator.style.width = lRect.width + 'px';
+                    }
                 }
             }
 
-            window.addEventListener('load', function() { moveNavIndicator(); });
+            moveNavIndicator();
+            window.addEventListener('load', function() { moveNavIndicator(); handleScrollSpy(); });
             window.addEventListener('resize', function() { moveNavIndicator(); });
-            setTimeout(function() { moveNavIndicator(); }, 100);
-            setTimeout(function() { moveNavIndicator(); }, 300);
+            if (document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(function() { moveNavIndicator(); });
+            }
+            setTimeout(function() { moveNavIndicator(); handleScrollSpy(); }, 50);
+            setTimeout(function() { moveNavIndicator(); handleScrollSpy(); }, 250);
 
-            // Smooth scroll on click with indicator lock
+            // Release click lock immediately if user manually scrolls with mouse wheel or touch
+            function releaseClickLock() {
+                if (isUserClicking) {
+                    isUserClicking = false;
+                    clearTimeout(clickTimer);
+                }
+            }
+            window.addEventListener('wheel', releaseClickLock, { passive: true });
+            window.addEventListener('touchmove', releaseClickLock, { passive: true });
+
+            // Smooth scroll on desktop nav link click
             navLinks.forEach(function(link) {
                 link.addEventListener('click', function(e) {
                     var targetId = this.getAttribute('href');
@@ -134,8 +114,14 @@
                             this.classList.add('active');
                             moveNavIndicator(this);
 
+                            var mobileNavLinks = document.querySelectorAll('.mobile-nav-link');
+                            mobileNavLinks.forEach(function(ml) {
+                                if (ml.getAttribute('href') === targetId) ml.classList.add('active');
+                                else ml.classList.remove('active');
+                            });
+
                             var topRow = document.querySelector('.top-row');
-                            var navHeight = topRow ? topRow.offsetHeight + 24 : 86;
+                            var navHeight = topRow ? topRow.offsetHeight + 20 : 80;
                             var elementPosition = targetEl.getBoundingClientRect().top;
                             var offsetPosition = elementPosition + window.pageYOffset - navHeight;
 
@@ -144,6 +130,7 @@
                                 behavior: 'smooth'
                             });
 
+                            currentActiveSectionId = targetId.substring(1);
                             clickTimer = setTimeout(function() {
                                 isUserClicking = false;
                             }, 850);
@@ -152,15 +139,8 @@
                 });
             });
 
-            var spySections = [
-                { id: 'top', link: navLinks[0] },
-                { id: 'relay', link: navLinks[1] },
-                { id: 'telemetri', link: navLinks[2] },
-                { id: 'hardware', link: navLinks[3] },
-                { id: 'aws', link: navLinks[4] }
-            ];
-
-            window.addEventListener('scroll', function() {
+            // Single unified scrollspy calculation
+            function handleScrollSpy() {
                 var topRow = document.querySelector('.top-row');
                 if (topRow) {
                     if (window.scrollY > 15) {
@@ -172,31 +152,66 @@
 
                 if (isUserClicking) return;
 
-                var topRowHeight = topRow ? topRow.offsetHeight : 80;
-                var currentPos = window.pageYOffset + topRowHeight + 120;
-                var currentId = 'top';
+                var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                var winHeight = window.innerHeight;
+                var docHeight = document.documentElement.scrollHeight;
+                var topRowHeight = topRow ? topRow.offsetHeight : 70;
+                var triggerOffset = scrollY + topRowHeight + 120;
 
-                spySections.forEach(function(sec) {
-                    var el = document.getElementById(sec.id);
-                    if (el) {
-                        var absTop = el.getBoundingClientRect().top + window.pageYOffset;
-                        if (absTop <= currentPos) {
-                            currentId = sec.id;
+                var targetId = spySectionIds[0];
+
+                if (scrollY + winHeight >= docHeight - 50) {
+                    targetId = spySectionIds[spySectionIds.length - 1];
+                } else if (scrollY < 60) {
+                    targetId = spySectionIds[0];
+                } else {
+                    for (var i = 0; i < spySectionIds.length; i++) {
+                        var el = document.getElementById(spySectionIds[i]);
+                        if (el) {
+                            var absTop = el.getBoundingClientRect().top + scrollY;
+                            if (absTop <= triggerOffset) {
+                                targetId = spySectionIds[i];
+                            }
                         }
                     }
-                });
+                }
 
-                var activeLink = null;
-                spySections.forEach(function(sec) {
-                    if (sec.link && sec.id === currentId) {
-                        activeLink = sec.link;
+                if (targetId !== currentActiveSectionId) {
+                    currentActiveSectionId = targetId;
+
+                    var activeLink = null;
+                    navLinks.forEach(function(link) {
+                        if (link.getAttribute('href') === '#' + targetId) {
+                            link.classList.add('active');
+                            activeLink = link;
+                        } else {
+                            link.classList.remove('active');
+                        }
+                    });
+
+                    var mobileNavLinks = document.querySelectorAll('.mobile-nav-link');
+                    mobileNavLinks.forEach(function(ml) {
+                        if (ml.getAttribute('href') === '#' + targetId) {
+                            ml.classList.add('active');
+                        } else {
+                            ml.classList.remove('active');
+                        }
+                    });
+
+                    if (activeLink) {
+                        moveNavIndicator(activeLink);
                     }
-                });
+                }
+            }
 
-                if (activeLink && !activeLink.classList.contains('active')) {
-                    navLinks.forEach(function(l) { l.classList.remove('active'); });
-                    activeLink.classList.add('active');
-                    moveNavIndicator(activeLink);
+            var scrollTicking = false;
+            window.addEventListener('scroll', function() {
+                if (!scrollTicking) {
+                    window.requestAnimationFrame(function() {
+                        handleScrollSpy();
+                        scrollTicking = false;
+                    });
+                    scrollTicking = true;
                 }
             }, { passive: true });
 
@@ -1181,6 +1196,7 @@
                                 if (dl.getAttribute('href') === targetId) {
                                     navLinks.forEach(function(l) { l.classList.remove('active'); });
                                     dl.classList.add('active');
+                                    moveNavIndicator(dl);
                                 }
                             });
 
@@ -1202,22 +1218,4 @@
                         }
                     });
                 });
-
-                // Synchronize scroll-spy with mobile dropdown links
-                window.addEventListener('scroll', function() {
-                    var currentPos = window.pageYOffset + 180;
-                    var spyIds = ['top', 'relay', 'telemetri', 'hardware', 'aws'];
-                    var curId = 'top';
-                    spyIds.forEach(function(id) {
-                        var el = document.getElementById(id);
-                        if (el) {
-                            var t = el.getBoundingClientRect().top + window.pageYOffset;
-                            if (t <= currentPos) curId = id;
-                        }
-                    });
-                    mobileNavLinks.forEach(function(ml) {
-                        if (ml.getAttribute('href') === '#' + curId) ml.classList.add('active');
-                        else ml.classList.remove('active');
-                    });
-                }, { passive: true });
             })();
