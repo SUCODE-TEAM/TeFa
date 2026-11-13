@@ -517,18 +517,27 @@
                         ph_down_dose: parseFloat(newSettings.phDownDose) || 0
                     }
                 };
+                var publishResult = 'offline';
                 if (typeof window.publishMqttSettings === 'function') {
-                    window.publishMqttSettings(publishPayload);
+                    publishResult = window.publishMqttSettings(publishPayload);
                 }
 
                 var originalText = saveBtn.textContent;
-                saveBtn.textContent = 'SAVED ✓';
-                saveBtn.style.background = '#2E7D32';
+                if (publishResult === 'sent' || publishResult === true) {
+                    saveBtn.textContent = 'SAVED & SENT ✓';
+                    saveBtn.style.background = '#2E7D32';
+                } else if (publishResult === 'queued') {
+                    saveBtn.textContent = 'SAVED (MENUNGGU MQTT)';
+                    saveBtn.style.background = '#E65100';
+                } else {
+                    saveBtn.textContent = 'SAVED (MQTT OFFLINE)';
+                    saveBtn.style.background = '#C62828';
+                }
                 setTimeout(function () {
                     saveBtn.textContent = originalText;
                     saveBtn.style.background = '#1B5E20';
                     closeModal();
-                }, 500);
+                }, 800);
             });
         }
 
@@ -1342,6 +1351,7 @@
                             window.setNavClicking(false);
                         }
                     }, 900);
+                }
             }
         });
     });

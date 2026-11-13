@@ -16,9 +16,401 @@
         }
     };
 
+    var STORAGE_KEY_LOG = 'tefa_telemetry_log_v1';
     var minWaterTemp = null;
     var maxWaterTemp = null;
-    var telemetryHistory = []; // max 15 titik untuk grafik SVG
+    var telemetryHistory = []; // live short buffer for AWS bars
+    var telemetryLog = loadTelemetryLog();
+    var pendingSettingsPayload = null;
+    var chartState = {
+        initialized: false,
+        animFrameId: null,
+        currPoints: null,
+        displayedPoints: [],
+        hoverIdx: -1,
+        activeRange: '24J',
+        visibleSeries: { ec: true, ph: true, temp: true },
+        paths: {}
+    };
+
+    function loadTelemetryLog() {
+        try {
+            var raw = localStorage.getItem(STORAGE_KEY_LOG);
+            if (!raw) return [];
+            var arr = JSON.parse(raw);
+            if (!Array.isArray(arr)) return [];
+            var cutoff = Date.now() - 30 * 24 * 3600 * 1000;
+            return arr.filter(function (item) { return item && item.ts >= cutoff; }).slice(-2000);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveTelemetryLog() {
+        try {
+            localStorage.setItem(STORAGE_KEY_LOG, JSON.stringify(telemetryLog.slice(-2000)));
+        } catch (e) {
+            // ignore quota errors
+        }
+    }
+
+    function formatShortDate(ts) {
+        var d = new Date(ts);
+        var dd = String(d.getDate()).padStart(2, '0');
+        var mm = String(d.getMonth() + 1).padStart(2, '0');
+        return dd + '/' + mm;
+    }
+
+    function formatClock(ts, withSec) {
+        var d = new Date(ts);
+        var hh = String(d.getHours()).padStart(2, '0');
+        var mi = String(d.getMinutes()).padStart(2, '0');
+        var ss = String(d.getSeconds()).padStart(2, '0');
+        return withSec ? (hh + ':' + mi + ':' + ss) : (hh + ':' + mi);
+    }
+
+    function getActiveRangeFromDOM() {
+        var onBtn = document.querySelector('#rangeTabs button.on');
+        return onBtn ? onBtn.textContent.trim().toUpperCase() : '24J';
+    }
+
+    function getSeriesForRange(rangeKey) {
+        if (telemetryLog.length === 0) return { points: [], label: '' };
+        var latestTs = telemetryLog[telemetryLog.length - 1].ts;
+        var windowMs = 24 * 3600 * 1000;
+        var desc = '24 Jam Terakhir';
+
+        if (rangeKey === '1J') {
+            windowMs = 1 * 3600 * 1000;
+            desc = '1 Jam Terakhir (Detail)';
+        } else if (rangeKey === '24J') {
+            windowMs = 24 * 3600 * 1000;
+            desc = '24 Jam Terakhir';
+        } else if (rangeKey === '7H') {
+            windowMs = 7 * 24 * 3600 * 1000;
+            desc = '7 Hari Terakhir';
+        } else if (rangeKey === '30H') {
+            windowMs = 30 * 24 * 3600 * 1000;
+            desc = '30 Hari Terakhir';
+        }
+
+        var filtered = telemetryLog.filter(function (p) {
+            return p.ts >= (latestTs - windowMs);
+        });
+        if (filtered.length === 0) filtered = telemetryLog.slice(-20);
+
+        if (rangeKey === '1J') {
+            var rawPts = filtered.slice(-20).map(function (p) {
+                return {
+                    ts: p.ts,
+                    time: p.time || formatClock(p.ts, true),
+                    axisLabel: p.time || formatClock(p.ts, true),
+                    ph: p.ph,
+                    ec: p.ec,
+                    waterTemp: p.waterTemp
+                };
+            });
+            return { points: rawPts, label: desc + ' · ' + rawPts.length + ' titik' };
+        }
+
+        var span = Math.max(1, filtered[filtered.length - 1].ts - filtered[0].ts);
+        var bucketMs = 60 * 1000;
+
+        if (rangeKey === '24J') {
+            if (span > 3 * 3600 * 1000) bucketMs = 15 * 60 * 1000;
+            else if (span > 30 * 60 * 1000) bucketMs = 2 * 60 * 1000;
+            else if (span > 2 * 60 * 1000) bucketMs = 30 * 1000;
+            else bucketMs = 10 * 1000;
+        } else if (rangeKey === '7H') {
+            if (span > 24 * 3600 * 1000) bucketMs = 3 * 3600 * 1000;
+            else if (span > 2 * 3600 * 1000) bucketMs = 30 * 60 * 1000;
+            else bucketMs = 60 * 1000;
+        } else if (rangeKey === '30H') {
+            if (span > 48 * 3600 * 1000) bucketMs = 24 * 3600 * 1000;
+            else if (span > 6 * 3600 * 1000) bucketMs = 4 * 3600 * 1000;
+            else bucketMs = 5 * 60 * 1000;
+        }
+
+        var buckets = {};
+        var order = [];
+        filtered.forEach(function (p) {
+            var bKey = Math.floor(p.ts / bucketMs) * bucketMs;
+            if (!buckets[bKey]) {
+                buckets[bKey] = { sumPh: 0, sumEc: 0, sumTemp: 0, count: 0, ts: bKey, lastTime: p.time };
+                order.push(bKey);
+            }
+            buckets[bKey].sumPh += (p.ph || 0);
+            buckets[bKey].sumEc += (p.ec || 0);
+            buckets[bKey].sumTemp += (p.waterTemp || 0);
+            buckets[bKey].count += 1;
+            buckets[bKey].lastTime = p.time;
+        });
+
+        var agg = order.slice(-35).map(function (k) {
+            var b = buckets[k];
+            var axisLbl = '';
+            var fullTime = '';
+            if (rangeKey === '24J') {
+                axisLbl = span < 2 * 60 * 1000 ? formatClock(b.ts, true) : formatClock(b.ts, false);
+                fullTime = formatClock(b.ts, true);
+            } else if (rangeKey === '7H') {
+                axisLbl = formatShortDate(b.ts) + ' ' + formatClock(b.ts, false);
+                fullTime = formatShortDate(b.ts) + ' · ' + formatClock(b.ts, false);
+            } else {
+                axisLbl = span > 48 * 3600 * 1000 ? formatShortDate(b.ts) : (formatShortDate(b.ts) + ' ' + formatClock(b.ts, false));
+                fullTime = formatShortDate(b.ts) + ' · ' + formatClock(b.ts, false);
+            }
+            return {
+                ts: b.ts,
+                time: fullTime,
+                axisLabel: axisLbl,
+                ph: b.sumPh / b.count,
+                ec: b.sumEc / b.count,
+                waterTemp: b.sumTemp / b.count
+            };
+        });
+
+        return { points: agg, label: desc + ' · ' + agg.length + ' interval' };
+    }
+
+    function injectChartStyles() {
+        if (document.getElementById('tefa-live-chart-styles')) return;
+        var style = document.createElement('style');
+        style.id = 'tefa-live-chart-styles';
+        style.textContent = [
+            '#telemetri .chartbox { position: relative; cursor: crosshair; }',
+            '#telemetri .legend span { cursor: pointer; user-select: none; transition: opacity 0.2s ease; }',
+            '#telemetri .legend span.dimmed { opacity: 0.35; text-decoration: line-through; }',
+            '.chart-hover-layer { position: absolute; pointer-events: none; z-index: 5; overflow: visible; }',
+            '.chart-crosshair { position: absolute; top: 0; bottom: 0; width: 1.5px; background: repeating-linear-gradient(to bottom, rgba(27,94,32,0.45) 0 4px, transparent 4px 8px); opacity: 0; transition: left 0.08s ease-out, opacity 0.15s ease; }',
+            '.chart-dot { position: absolute; width: 11px; height: 11px; border-radius: 50%; border: 2.5px solid #fff; transform: translate(-50%, -50%); opacity: 0; transition: left 0.08s ease-out, top 0.08s ease-out, opacity 0.15s ease; box-shadow: 0 2px 6px rgba(0,0,0,0.22); }',
+            '.chart-tooltip { position: absolute; min-width: 185px; background: rgba(255,255,255,0.96); backdrop-filter: blur(8px); border: 1px solid #C8E6C9; border-radius: 12px; padding: 10px 13px; box-shadow: 0 10px 26px rgba(27,94,32,0.14); font-size: 12px; color: #1B3B1E; pointer-events: none; z-index: 10; opacity: 0; transition: left 0.08s ease-out, top 0.08s ease-out, opacity 0.15s ease; }',
+            '.chart-tooltip-time { font-weight: 700; font-size: 11px; color: #2E7D32; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid #E8F5E9; letter-spacing: 0.3px; }',
+            '.chart-tooltip-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 3px 0; font-weight: 500; }',
+            '.chart-tooltip-label { display: flex; align-items: center; gap: 6px; color: #4A664D; }',
+            '.chart-tooltip-swatch { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }',
+            '.chart-tooltip-val { font-weight: 700; color: #1B3B1E; font-variant-numeric: tabular-nums; }'
+        ].join('\n');
+        document.head.appendChild(style);
+    }
+
+    function buildSmoothPath(pts, h, closeArea) {
+        if (!pts || pts.length === 0) return '';
+        if (pts.length === 1) {
+            var p = pts[0];
+            var dSingle = 'M0 ' + p.y.toFixed(2) + ' L1260 ' + p.y.toFixed(2);
+            return closeArea ? (dSingle + ' L1260 ' + h + ' L0 ' + h + ' Z') : dSingle;
+        }
+        var d = 'M' + pts[0].x.toFixed(2) + ' ' + pts[0].y.toFixed(2);
+        for (var i = 0; i < pts.length - 1; i++) {
+            var p0 = pts[Math.max(0, i - 1)];
+            var p1 = pts[i];
+            var p2 = pts[i + 1];
+            var p3 = pts[Math.min(pts.length - 1, i + 2)];
+
+            var cp1x = p1.x + (p2.x - p0.x) / 6;
+            var cp1y = Math.min(h - 6, Math.max(6, p1.y + (p2.y - p0.y) / 6));
+            var cp2x = p2.x - (p3.x - p1.x) / 6;
+            var cp2y = Math.min(h - 6, Math.max(6, p2.y - (p3.y - p1.y) / 6));
+
+            d += ' C' + cp1x.toFixed(2) + ' ' + cp1y.toFixed(2) + ',' +
+                 cp2x.toFixed(2) + ' ' + cp2y.toFixed(2) + ',' +
+                 p2.x.toFixed(2) + ' ' + p2.y.toFixed(2);
+        }
+        if (closeArea) {
+            d += ' L' + pts[pts.length - 1].x.toFixed(2) + ' ' + h +
+                 ' L' + pts[0].x.toFixed(2) + ' ' + h + ' Z';
+        }
+        return d;
+    }
+
+    function computeSeriesCoords(dataList, w, h) {
+        var n = dataList.length;
+        function mapSeries(getter, maxVal) {
+            return dataList.map(function (item, idx) {
+                var x = n === 1 ? w / 2 : (idx / (n - 1)) * w;
+                var ratio = Math.min(1, Math.max(0, getter(item) / maxVal));
+                var y = h - 14 - ratio * (h - 32);
+                return { x: x, y: y };
+            });
+        }
+        return {
+            ec: mapSeries(function (p) { return (p.ec || 0) * 33; }, 100),
+            ph: mapSeries(function (p) { return (p.ph || 0) * 7; }, 100),
+            temp: mapSeries(function (p) { return p.waterTemp || 0; }, 50)
+        };
+    }
+
+    function resamplePoints(oldPts, newLen, w) {
+        if (!oldPts || oldPts.length === 0) return null;
+        if (oldPts.length === newLen) return oldPts;
+        var res = [];
+        for (var i = 0; i < newLen; i++) {
+            var x = newLen === 1 ? w / 2 : (i / (newLen - 1)) * w;
+            var srcIdx = Math.min(oldPts.length - 1, Math.round((i / Math.max(1, newLen - 1)) * (oldPts.length - 1)));
+            res.push({ x: x, y: oldPts[srcIdx].y });
+        }
+        return res;
+    }
+
+    function ensureChartInteractive(chartBox, svg) {
+        if (chartState.initialized) return;
+        chartState.initialized = true;
+        injectChartStyles();
+
+        var ns = 'http://www.w3.org/2000/svg';
+        // Buat persistent SVG paths
+        var areaPath = document.createElementNS(ns, 'path');
+        areaPath.setAttribute('class', 'live-line');
+        areaPath.setAttribute('fill', 'url(#gr)');
+        areaPath.setAttribute('stroke', 'none');
+
+        function makeLine(color) {
+            var p = document.createElementNS(ns, 'path');
+            p.setAttribute('class', 'live-line');
+            p.setAttribute('stroke', color);
+            p.setAttribute('stroke-width', '3');
+            p.setAttribute('stroke-linecap', 'round');
+            p.setAttribute('stroke-linejoin', 'round');
+            p.setAttribute('fill', 'none');
+            return p;
+        }
+
+        var pathEc = makeLine('#1B5E20');
+        var pathPh = makeLine('#66BB6A');
+        var pathTemp = makeLine('#A5D6A7');
+
+        svg.appendChild(areaPath);
+        svg.appendChild(pathTemp);
+        svg.appendChild(pathPh);
+        svg.appendChild(pathEc);
+
+        chartState.paths = { area: areaPath, ec: pathEc, ph: pathPh, temp: pathTemp };
+
+        // Buat HTML overlay di atas svg.plot untuk crosshair, dots, dan tooltip anti-distorsi
+        var hoverLayer = document.createElement('div');
+        hoverLayer.className = 'chart-hover-layer';
+
+        var crosshair = document.createElement('div');
+        crosshair.className = 'chart-crosshair';
+
+        var dotEc = document.createElement('div');
+        dotEc.className = 'chart-dot';
+        dotEc.style.background = '#1B5E20';
+
+        var dotPh = document.createElement('div');
+        dotPh.className = 'chart-dot';
+        dotPh.style.background = '#66BB6A';
+
+        var dotTemp = document.createElement('div');
+        dotTemp.className = 'chart-dot';
+        dotTemp.style.background = '#A5D6A7';
+
+        var tooltip = document.createElement('div');
+        tooltip.className = 'chart-tooltip';
+
+        hoverLayer.appendChild(crosshair);
+        hoverLayer.appendChild(dotTemp);
+        hoverLayer.appendChild(dotPh);
+        hoverLayer.appendChild(dotEc);
+        chartBox.appendChild(hoverLayer);
+        chartBox.appendChild(tooltip);
+
+        function syncLayerBounds() {
+            var boxRect = chartBox.getBoundingClientRect();
+            var svgRect = svg.getBoundingClientRect();
+            hoverLayer.style.left = (svgRect.left - boxRect.left) + 'px';
+            hoverLayer.style.top = (svgRect.top - boxRect.top) + 'px';
+            hoverLayer.style.width = svgRect.width + 'px';
+            hoverLayer.style.height = svgRect.height + 'px';
+            return { boxRect: boxRect, svgRect: svgRect };
+        }
+
+        function showHoverAt(clientX, clientY) {
+            var pts = chartState.displayedPoints;
+            if (!pts || pts.length === 0 || !chartState.currPoints) return;
+            var bounds = syncLayerBounds();
+            var svgRect = bounds.svgRect;
+            var boxRect = bounds.boxRect;
+            if (svgRect.width <= 0) return;
+
+            var n = pts.length;
+            var relX = Math.min(1, Math.max(0, (clientX - svgRect.left) / svgRect.width));
+            var idx = n === 1 ? 0 : Math.round(relX * (n - 1));
+            idx = Math.min(n - 1, Math.max(0, idx));
+            chartState.hoverIdx = idx;
+
+            var pt = pts[idx];
+            var pEc = chartState.currPoints.ec[idx];
+            var pPh = chartState.currPoints.ph[idx];
+            var pTemp = chartState.currPoints.temp[idx];
+            if (!pEc || !pPh || !pTemp) return;
+
+            var xPct = ((pEc.x / 1260) * 100).toFixed(3) + '%';
+            crosshair.style.left = xPct;
+            crosshair.style.opacity = '1';
+
+            dotEc.style.left = xPct;
+            dotEc.style.top = ((pEc.y / 260) * 100).toFixed(3) + '%';
+            dotEc.style.opacity = chartState.visibleSeries.ec ? '1' : '0';
+
+            dotPh.style.left = xPct;
+            dotPh.style.top = ((pPh.y / 260) * 100).toFixed(3) + '%';
+            dotPh.style.opacity = chartState.visibleSeries.ph ? '1' : '0';
+
+            dotTemp.style.left = xPct;
+            dotTemp.style.top = ((pTemp.y / 260) * 100).toFixed(3) + '%';
+            dotTemp.style.opacity = chartState.visibleSeries.temp ? '1' : '0';
+
+            var rowsHtml = ['<div class="chart-tooltip-time">' + pt.time + ' WIB</div>'];
+            if (chartState.visibleSeries.ec) {
+                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#1B5E20"></i>EC / TDS</span><span class="chart-tooltip-val">' + (pt.ec || 0).toFixed(2) + ' mS/cm</span></div>');
+            }
+            if (chartState.visibleSeries.ph) {
+                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#66BB6A"></i>pH</span><span class="chart-tooltip-val">' + (pt.ph || 0).toFixed(2) + ' pH</span></div>');
+            }
+            if (chartState.visibleSeries.temp) {
+                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#A5D6A7"></i>Water Temp</span><span class="chart-tooltip-val">' + (pt.waterTemp || 0).toFixed(1) + ' °C</span></div>');
+            }
+            tooltip.innerHTML = rowsHtml.join('');
+
+            var cursorX = clientX - boxRect.left;
+            var cursorY = clientY - boxRect.top;
+            var tipW = tooltip.offsetWidth || 190;
+            var tipH = tooltip.offsetHeight || 105;
+
+            var tipLeft = cursorX + 16;
+            if (tipLeft + tipW > boxRect.width - 8) {
+                tipLeft = cursorX - tipW - 16;
+            }
+            tipLeft = Math.max(8, Math.min(boxRect.width - tipW - 8, tipLeft));
+            var tipTop = Math.max(8, Math.min(boxRect.height - tipH - 8, cursorY - tipH / 2));
+
+            tooltip.style.left = tipLeft + 'px';
+            tooltip.style.top = tipTop + 'px';
+            tooltip.style.opacity = '1';
+        }
+
+        function hideHover() {
+            chartState.hoverIdx = -1;
+            crosshair.style.opacity = '0';
+            dotEc.style.opacity = '0';
+            dotPh.style.opacity = '0';
+            dotTemp.style.opacity = '0';
+            tooltip.style.opacity = '0';
+        }
+
+        chartBox.addEventListener('mousemove', function (e) {
+            showHoverAt(e.clientX, e.clientY);
+        });
+        chartBox.addEventListener('touchmove', function (e) {
+            if (e.touches && e.touches[0]) {
+                showHoverAt(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: true });
+        chartBox.addEventListener('mouseleave', hideHover);
+        chartBox.addEventListener('touchend', hideHover);
+    }
 
     function formatWibTime(isoString) {
         try {
@@ -76,57 +468,105 @@
         }
     }
 
+    function applySeriesVisibility() {
+        if (!chartState.paths || !chartState.paths.ec) return;
+        chartState.paths.ec.style.display = chartState.visibleSeries.ec ? '' : 'none';
+        chartState.paths.area.style.display = chartState.visibleSeries.ec ? '' : 'none';
+        chartState.paths.ph.style.display = chartState.visibleSeries.ph ? '' : 'none';
+        chartState.paths.temp.style.display = chartState.visibleSeries.temp ? '' : 'none';
+    }
+
     function renderTelemetryChart() {
+        var chartBox = document.querySelector('#telemetri .chartbox');
         var chartEmpty = document.querySelector('#telemetri .chart-empty-msg');
         var svg = document.querySelector('#telemetri svg.plot');
         var xax = document.querySelector('#telemetri .xax');
-        if (!svg || telemetryHistory.length === 0) return;
+        if (!chartBox || !svg) return;
+
+        chartState.activeRange = getActiveRangeFromDOM();
+        var rangeResult = getSeriesForRange(chartState.activeRange);
+        var pts = rangeResult.points;
+        chartState.displayedPoints = pts;
+
+        if (pts.length === 0) return;
 
         if (chartEmpty) chartEmpty.style.display = 'none';
-
-        // Hapus path data lama (sisakan <defs> dan grid <g>)
-        svg.querySelectorAll('.live-line').forEach(function (el) { el.remove(); });
+        ensureChartInteractive(chartBox, svg);
+        applySeriesVisibility();
 
         var w = 1260;
         var h = 260;
-        var n = telemetryHistory.length;
+        var n = pts.length;
+        var target = computeSeriesCoords(pts, w, h);
 
-        function buildPath(values, maxVal) {
-            return values.map(function (val, idx) {
-                var x = n === 1 ? w / 2 : (idx / (n - 1)) * w;
-                var ratio = Math.min(1, Math.max(0, val / maxVal));
-                var y = h - 10 - ratio * (h - 30);
-                return (idx === 0 ? 'M' : 'L') + x.toFixed(1) + ' ' + y.toFixed(1);
-            }).join(' ');
+        var fromPts = chartState.currPoints ? {
+            ec: resamplePoints(chartState.currPoints.ec, n, w),
+            ph: resamplePoints(chartState.currPoints.ph, n, w),
+            temp: resamplePoints(chartState.currPoints.temp, n, w)
+        } : null;
+
+        chartState.currPoints = target;
+
+        if (chartState.animFrameId) {
+            cancelAnimationFrame(chartState.animFrameId);
         }
 
-        var series = [
-            { vals: telemetryHistory.map(function (p) { return (p.ec || 0) * 33; }), max: 100, color: '#1B5E20' }, // EC scaled
-            { vals: telemetryHistory.map(function (p) { return (p.ph || 0) * 7; }), max: 100, color: '#66BB6A' },  // pH scaled
-            { vals: telemetryHistory.map(function (p) { return p.waterTemp || 0; }), max: 50, color: '#A5D6A7' }   // Temp
-        ];
+        if (!fromPts) {
+            chartState.paths.ec.setAttribute('d', buildSmoothPath(target.ec, h, false));
+            chartState.paths.area.setAttribute('d', buildSmoothPath(target.ec, h, true));
+            chartState.paths.ph.setAttribute('d', buildSmoothPath(target.ph, h, false));
+            chartState.paths.temp.setAttribute('d', buildSmoothPath(target.temp, h, false));
+        } else {
+            var startTime = null;
+            var duration = 450;
 
-        var ns = 'http://www.w3.org/2000/svg';
-        series.forEach(function (s) {
-            var path = document.createElementNS(ns, 'path');
-            path.setAttribute('class', 'live-line');
-            path.setAttribute('d', buildPath(s.vals, s.max));
-            path.setAttribute('stroke', s.color);
-            path.setAttribute('stroke-width', '3');
-            path.setAttribute('stroke-linecap', 'round');
-            path.setAttribute('stroke-linejoin', 'round');
-            path.setAttribute('fill', 'none');
-            svg.appendChild(path);
-        });
+            function step(ts) {
+                if (!startTime) startTime = ts;
+                var rawT = Math.min(1, (ts - startTime) / duration);
+                var ease = 1 - Math.pow(1 - rawT, 3); // easeOutCubic
 
-        if (xax && n > 1) {
-            var indices = [0, Math.floor((n - 1) * 0.25), Math.floor((n - 1) * 0.5), Math.floor((n - 1) * 0.75), n - 1];
-            var spans = xax.querySelectorAll('span');
-            indices.forEach(function (idx, i) {
-                if (spans[i] && telemetryHistory[idx]) {
-                    spans[i].textContent = telemetryHistory[idx].time.slice(0, 5);
+                function interp(a, b) {
+                    return b.map(function (pt, i) {
+                        var src = a[i] || pt;
+                        return {
+                            x: src.x + (pt.x - src.x) * ease,
+                            y: src.y + (pt.y - src.y) * ease
+                        };
+                    });
                 }
-            });
+
+                var curEc = interp(fromPts.ec, target.ec);
+                var curPh = interp(fromPts.ph, target.ph);
+                var curTemp = interp(fromPts.temp, target.temp);
+
+                chartState.paths.ec.setAttribute('d', buildSmoothPath(curEc, h, false));
+                chartState.paths.area.setAttribute('d', buildSmoothPath(curEc, h, true));
+                chartState.paths.ph.setAttribute('d', buildSmoothPath(curPh, h, false));
+                chartState.paths.temp.setAttribute('d', buildSmoothPath(curTemp, h, false));
+
+                if (rawT < 1) {
+                    chartState.animFrameId = requestAnimationFrame(step);
+                } else {
+                    chartState.animFrameId = null;
+                }
+            }
+            chartState.animFrameId = requestAnimationFrame(step);
+        }
+
+        if (xax && n >= 1) {
+            var spans = xax.querySelectorAll('span');
+            if (n === 1) {
+                spans.forEach(function (sp, i) {
+                    sp.textContent = i === 2 ? pts[0].axisLabel : '';
+                });
+            } else {
+                var indices = [0, Math.floor((n - 1) * 0.25), Math.floor((n - 1) * 0.5), Math.floor((n - 1) * 0.75), n - 1];
+                indices.forEach(function (idx, i) {
+                    if (spans[i] && pts[idx]) {
+                        spans[i].textContent = pts[idx].axisLabel;
+                    }
+                });
+            }
         }
     }
 
@@ -308,16 +748,23 @@
             });
         }
 
-        // 6. Update Telemetry Chart
-        telemetryHistory.push({
+        // 6. Update Telemetry Chart & Log
+        var logEntry = {
+            ts: Date.now(),
             time: wibTime,
             ph: ph ? ph.value : 0,
             ec: ec ? ec.value : 0,
             waterTemp: waterTemp ? waterTemp.value : 0,
             airTemp: airTemp ? airTemp.value : 0,
             light: light ? light.value : 0
-        });
+        };
+        telemetryHistory.push(logEntry);
         if (telemetryHistory.length > 15) telemetryHistory.shift();
+
+        telemetryLog.push(logEntry);
+        if (telemetryLog.length > 2000) telemetryLog.shift();
+        saveTelemetryLog();
+
         renderTelemetryChart();
 
         // 7. Tambah ke Tabel History Sensor (#hist)
@@ -453,6 +900,12 @@
                     console.log('[TeFa MQTT] Berhasil subscribe ke ' + MQTT_CONFIG.topic);
                 }
             });
+
+            if (pendingSettingsPayload !== null) {
+                var queuedPayload = pendingSettingsPayload;
+                pendingSettingsPayload = null;
+                sendSettingsPayload(client, queuedPayload);
+            }
         });
 
         client.on('message', function (topic, message) {
@@ -484,27 +937,80 @@
         window.tefaMqttClient = client;
     }
 
-    window.publishMqttSettings = function (payload) {
+    function sendSettingsPayload(client, payload) {
         var jsonStr = JSON.stringify(payload);
+        client.publish(MQTT_CONFIG.publishTopic, jsonStr, { qos: 1, retain: true }, function (err) {
+            if (err) {
+                console.error('[TeFa MQTT] Gagal publish setting:', err);
+            } else {
+                console.log('[TeFa MQTT] Setting berhasil dipublish ke ' + MQTT_CONFIG.publishTopic + ':', payload);
+            }
+        });
+    }
+
+    window.publishMqttSettings = function (payload) {
         if (window.tefaMqttClient && window.tefaMqttClient.connected) {
-            window.tefaMqttClient.publish(MQTT_CONFIG.publishTopic, jsonStr, { qos: 0 }, function (err) {
-                if (err) {
-                    console.error('[TeFa MQTT] Gagal publish setting:', err);
-                } else {
-                    console.log('[TeFa MQTT] Setting berhasil dipublish ke ' + MQTT_CONFIG.publishTopic + ':', payload);
-                }
-            });
-            return true;
+            sendSettingsPayload(window.tefaMqttClient, payload);
+            return 'sent';
         } else {
-            console.warn('[TeFa MQTT] Belum terhubung ke broker, payload tidak terkirim:', payload);
-            return false;
+            pendingSettingsPayload = payload;
+            console.warn('[TeFa MQTT] Belum terhubung ke broker, payload diantrekan ke ' + MQTT_CONFIG.publishTopic + ':', payload);
+            if (window.tefaMqttClient && typeof window.tefaMqttClient.reconnect === 'function' && !window.tefaMqttClient.reconnecting) {
+                try {
+                    window.tefaMqttClient.reconnect();
+                } catch (e) {}
+            }
+            return 'queued';
         }
     };
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initMqttClient);
-    } else {
+    function initChartControls() {
+        var rangeTabs = document.getElementById('rangeTabs');
+        if (rangeTabs) {
+            rangeTabs.addEventListener('click', function (e) {
+                if (e.target.tagName !== 'BUTTON') return;
+                // Tunggu kelas .on berpindah lalu re-render grafik
+                setTimeout(function () {
+                    renderTelemetryChart();
+                }, 0);
+            });
+        }
+
+        var legendSpans = document.querySelectorAll('#telemetri .legend span');
+        var keys = ['ec', 'ph', 'temp'];
+        legendSpans.forEach(function (span, idx) {
+            var key = keys[idx];
+            if (!key) return;
+            span.title = 'Klik untuk tampil/sembunyikan garis';
+            span.addEventListener('click', function () {
+                // Pastikan minimal 1 garis tetap tampil
+                var activeCount = Object.keys(chartState.visibleSeries).filter(function (k) {
+                    return chartState.visibleSeries[k];
+                }).length;
+                if (chartState.visibleSeries[key] && activeCount <= 1) return;
+
+                chartState.visibleSeries[key] = !chartState.visibleSeries[key];
+                if (chartState.visibleSeries[key]) span.classList.remove('dimmed');
+                else span.classList.add('dimmed');
+                applySeriesVisibility();
+            });
+        });
+
+        // Jika sudah ada data tersimpan sebelumnya dari localStorage, langsung tampilkan
+        if (telemetryLog.length > 0) {
+            renderTelemetryChart();
+        }
+    }
+
+    function init() {
+        initChartControls();
         initMqttClient();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
     }
 })();
 
