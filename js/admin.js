@@ -370,6 +370,9 @@
             tdsMin: '600', tdsMax: '1200',
             tempMin: '20', tempMax: '30',
             humMin: '50', humMax: '85',
+            mqttBroker: 'wss://broker.emqx.io:8084/mqtt',
+            mqttTopicSub: 'tefa/hidroponik/sensor',
+            mqttTopicPub: 'tefa/hidroponik/aktuator',
             pompa: 'off',
             ecTarget: '1.8',
             phUpDose: '2',
@@ -389,6 +392,9 @@
                 document.getElementById('set_temp_max').value = saved.tempMax || defaultSettings.tempMax;
                 document.getElementById('set_hum_min').value = saved.humMin || defaultSettings.humMin;
                 document.getElementById('set_hum_max').value = saved.humMax || defaultSettings.humMax;
+                if (document.getElementById('set_mqtt_broker')) document.getElementById('set_mqtt_broker').value = saved.mqttBroker || defaultSettings.mqttBroker;
+                if (document.getElementById('set_mqtt_topic_sub')) document.getElementById('set_mqtt_topic_sub').value = saved.mqttTopicSub || defaultSettings.mqttTopicSub;
+                if (document.getElementById('set_mqtt_topic_pub')) document.getElementById('set_mqtt_topic_pub').value = saved.mqttTopicPub || defaultSettings.mqttTopicPub;
                 if (document.getElementById('set_pompa')) document.getElementById('set_pompa').value = saved.pompa || defaultSettings.pompa;
                 if (document.getElementById('set_ec_target')) document.getElementById('set_ec_target').value = saved.ecTarget || defaultSettings.ecTarget;
                 if (document.getElementById('set_ph_up_dose')) document.getElementById('set_ph_up_dose').value = saved.phUpDose || defaultSettings.phUpDose;
@@ -471,6 +477,9 @@
                 document.getElementById('set_temp_max').value = defaultSettings.tempMax;
                 document.getElementById('set_hum_min').value = defaultSettings.humMin;
                 document.getElementById('set_hum_max').value = defaultSettings.humMax;
+                if (document.getElementById('set_mqtt_broker')) document.getElementById('set_mqtt_broker').value = defaultSettings.mqttBroker;
+                if (document.getElementById('set_mqtt_topic_sub')) document.getElementById('set_mqtt_topic_sub').value = defaultSettings.mqttTopicSub;
+                if (document.getElementById('set_mqtt_topic_pub')) document.getElementById('set_mqtt_topic_pub').value = defaultSettings.mqttTopicPub;
                 if (document.getElementById('set_pompa')) document.getElementById('set_pompa').value = defaultSettings.pompa;
                 if (document.getElementById('set_ec_target')) document.getElementById('set_ec_target').value = defaultSettings.ecTarget;
                 if (document.getElementById('set_ph_up_dose')) document.getElementById('set_ph_up_dose').value = defaultSettings.phUpDose;
@@ -478,11 +487,21 @@
                 document.getElementById('set_telemetry_interval').value = defaultSettings.interval;
                 document.getElementById('set_ai_api_key').value = defaultSettings.apiKey;
                 localStorage.removeItem('tefa_dashboard_settings');
+                if (typeof window.updateMqttConnectionConfig === 'function') {
+                    window.updateMqttConnectionConfig({
+                        brokerUrl: defaultSettings.mqttBroker,
+                        topic: defaultSettings.mqttTopicSub,
+                        publishTopic: defaultSettings.mqttTopicPub
+                    });
+                }
             });
         }
 
         if (saveBtn) {
             saveBtn.addEventListener('click', function () {
+                var mqttBrokerEl = document.getElementById('set_mqtt_broker');
+                var mqttSubEl = document.getElementById('set_mqtt_topic_sub');
+                var mqttPubEl = document.getElementById('set_mqtt_topic_pub');
                 var pompaEl = document.getElementById('set_pompa');
                 var ecTargetEl = document.getElementById('set_ec_target');
                 var phUpEl = document.getElementById('set_ph_up_dose');
@@ -497,14 +516,25 @@
                     tempMax: document.getElementById('set_temp_max').value.trim(),
                     humMin: document.getElementById('set_hum_min').value.trim(),
                     humMax: document.getElementById('set_hum_max').value.trim(),
+                    mqttBroker: (mqttBrokerEl && mqttBrokerEl.value.trim()) || defaultSettings.mqttBroker,
+                    mqttTopicSub: (mqttSubEl && mqttSubEl.value.trim()) || defaultSettings.mqttTopicSub,
+                    mqttTopicPub: (mqttPubEl && mqttPubEl.value.trim()) || defaultSettings.mqttTopicPub,
                     pompa: pompaEl ? pompaEl.value : 'off',
-                    ecTarget: ecTargetEl ? ecTargetEl.value.trim() : '1.5',
-                    phUpDose: phUpEl ? phUpEl.value.trim() : '5',
-                    phDownDose: phDownEl ? phDownEl.value.trim() : '5',
+                    ecTarget: ecTargetEl ? ecTargetEl.value.trim() : defaultSettings.ecTarget,
+                    phUpDose: phUpEl ? phUpEl.value.trim() : defaultSettings.phUpDose,
+                    phDownDose: phDownEl ? phDownEl.value.trim() : defaultSettings.phDownDose,
                     interval: document.getElementById('set_telemetry_interval').value,
                     apiKey: document.getElementById('set_ai_api_key').value.trim()
                 };
                 localStorage.setItem('tefa_dashboard_settings', JSON.stringify(newSettings));
+
+                if (typeof window.updateMqttConnectionConfig === 'function') {
+                    window.updateMqttConnectionConfig({
+                        brokerUrl: newSettings.mqttBroker,
+                        topic: newSettings.mqttTopicSub,
+                        publishTopic: newSettings.mqttTopicPub
+                    });
+                }
 
                 // Publish setting ke MQTT dalam format JSON tefa/hidroponik/aktuator
                 var publishPayload = {

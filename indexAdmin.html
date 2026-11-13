@@ -743,6 +743,25 @@
                     </div>
                 </div>
 
+                <!-- Section: Koneksi Broker & Topik MQTT -->
+                <div class="setting-section">
+                    <h3 class="setting-section-title">Koneksi Broker &amp; Topik MQTT</h3>
+                    <div class="setting-field">
+                        <label class="setting-label">Broker MQTT (WebSocket URL / Host)</label>
+                        <input type="text" class="setting-input" id="set_mqtt_broker" value="wss://broker.emqx.io:8084/mqtt" placeholder="wss://broker.emqx.io:8084/mqtt" />
+                    </div>
+                    <div class="setting-grid-2" style="margin-top:12px;">
+                        <div class="setting-field">
+                            <label class="setting-label">Topik Subscribe (Sensor)</label>
+                            <input type="text" class="setting-input" id="set_mqtt_topic_sub" value="tefa/hidroponik/sensor" placeholder="tefa/hidroponik/sensor" />
+                        </div>
+                        <div class="setting-field">
+                            <label class="setting-label">Topik Publish (Aktuator)</label>
+                            <input type="text" class="setting-input" id="set_mqtt_topic_pub" value="tefa/hidroponik/aktuator" placeholder="tefa/hidroponik/aktuator" />
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Section: Kontrol & Dosis Hidroponik (Publish MQTT) -->
                 <div class="setting-section">
                     <h3 class="setting-section-title">Kontrol &amp; Dosis Hidroponik (MQTT)</h3>

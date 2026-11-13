@@ -2,10 +2,16 @@
     // Konfigurasi MQTT Broker (EMQX Public Broker - Test Sementara)
     // Catatan: Browser menggunakan WebSocket (wss:// port 8084) untuk terhubung ke broker yang sama
     // dengan port TCP 1883 pada ESP32 menggunakan protokol MQTT v3.1.1 (protocolVersion: 4).
-    var MQTT_CONFIG = {
+    var DEFAULT_MQTT_CONFIG = {
         brokerUrl: 'wss://broker.emqx.io:8084/mqtt',
         topic: 'tefa/hidroponik/sensor',
-        publishTopic: 'tefa/hidroponik/aktuator',
+        publishTopic: 'tefa/hidroponik/aktuator'
+    };
+
+    var MQTT_CONFIG = {
+        brokerUrl: DEFAULT_MQTT_CONFIG.brokerUrl,
+        topic: DEFAULT_MQTT_CONFIG.topic,
+        publishTopic: DEFAULT_MQTT_CONFIG.publishTopic,
         options: {
             clientId: 'tefa_web_' + Math.random().toString(16).slice(2, 10),
             protocolId: 'MQTT',
@@ -15,6 +21,59 @@
             connectTimeout: 10000
         }
     };
+
+    function isLocalHost(host) {
+        var h = (host || '').split(':')[0].toLowerCase();
+        if (h === 'localhost' || h === '127.0.0.1') return true;
+        if (/^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(h)) return true;
+        return false;
+    }
+
+    function normalizeBrokerUrl(input) {
+        if (!input || typeof input !== 'string') return DEFAULT_MQTT_CONFIG.brokerUrl;
+        var raw = input.trim();
+        if (!raw) return DEFAULT_MQTT_CONFIG.brokerUrl;
+
+        if (/^wss?:\/\//i.test(raw)) {
+            var m = raw.match(/^(wss?:\/\/)([^\/]+)(\/.*)?$/i);
+            if (m) {
+                var hostPart = m[2];
+                var pathPart = m[3] || '';
+                if (!pathPart && /emqx|hivemq/i.test(hostPart)) {
+                    pathPart = '/mqtt';
+                }
+                return m[1].toLowerCase() + hostPart + pathPart;
+            }
+            return raw;
+        }
+
+        raw = raw.replace(/^(mqtt|tcp):\/\//i, '');
+        var slashIdx = raw.indexOf('/');
+        var hostPort = slashIdx === -1 ? raw : raw.slice(0, slashIdx);
+        var pathStr = slashIdx === -1 ? '/mqtt' : (raw.slice(slashIdx) || '/mqtt');
+
+        if (hostPort.indexOf(':') === -1) {
+            hostPort += ':8084';
+        } else if (/:1883$/.test(hostPort)) {
+            hostPort = hostPort.replace(/:1883$/, ':8084');
+        }
+
+        var scheme = isLocalHost(hostPort) ? 'ws://' : 'wss://';
+        return scheme + hostPort + pathStr;
+    }
+
+    function loadSavedMqttConfig() {
+        try {
+            var saved = JSON.parse(localStorage.getItem('tefa_dashboard_settings') || '{}');
+            MQTT_CONFIG.brokerUrl = normalizeBrokerUrl(saved.mqttBroker || DEFAULT_MQTT_CONFIG.brokerUrl);
+            MQTT_CONFIG.topic = (saved.mqttTopicSub && saved.mqttTopicSub.trim()) || DEFAULT_MQTT_CONFIG.topic;
+            MQTT_CONFIG.publishTopic = (saved.mqttTopicPub && saved.mqttTopicPub.trim()) || DEFAULT_MQTT_CONFIG.publishTopic;
+        } catch (e) {
+            MQTT_CONFIG.brokerUrl = DEFAULT_MQTT_CONFIG.brokerUrl;
+            MQTT_CONFIG.topic = DEFAULT_MQTT_CONFIG.topic;
+            MQTT_CONFIG.publishTopic = DEFAULT_MQTT_CONFIG.publishTopic;
+        }
+    }
 
     var STORAGE_KEY_LOG = 'tefa_telemetry_log_v1';
     var minWaterTemp = null;
@@ -1059,13 +1118,26 @@
             return;
         }
 
+        if (window.tefaMqttClient) {
+            try {
+                if (typeof window.tefaMqttClient.removeAllListeners === 'function') {
+                    window.tefaMqttClient.removeAllListeners();
+                }
+                if (typeof window.tefaMqttClient.end === 'function') {
+                    window.tefaMqttClient.end(true);
+                }
+            } catch (e) { }
+            window.tefaMqttClient = null;
+        }
+
+        MQTT_CONFIG.options.clientId = 'tefa_web_' + Math.random().toString(16).slice(2, 10);
         console.log('[TeFa MQTT] Menghubungkan ke ' + MQTT_CONFIG.brokerUrl + ' (MQTT v3.1.1)...');
         setConnectionUI('Connecting', 'Menghubungkan MQTT...', false);
 
         var client = mqtt.connect(MQTT_CONFIG.brokerUrl, MQTT_CONFIG.options);
 
         client.on('connect', function () {
-            console.log('[TeFa MQTT] Terhubung ke broker.emqx.io! Subscribe topik: ' + MQTT_CONFIG.topic);
+            console.log('[TeFa MQTT] Terhubung ke ' + MQTT_CONFIG.brokerUrl + '! Subscribe topik: ' + MQTT_CONFIG.topic);
             setConnectionUI('Online', 'Menunggu data...', true);
 
             client.subscribe(MQTT_CONFIG.topic, { qos: 0 }, function (err) {
@@ -1140,6 +1212,43 @@
         }
     };
 
+    window.updateMqttConnectionConfig = function (cfg) {
+        var nextBroker = normalizeBrokerUrl((cfg && cfg.brokerUrl) || DEFAULT_MQTT_CONFIG.brokerUrl);
+        var nextSub = (cfg && cfg.topic ? String(cfg.topic).trim() : '') || DEFAULT_MQTT_CONFIG.topic;
+        var nextPub = (cfg && cfg.publishTopic ? String(cfg.publishTopic).trim() : '') || DEFAULT_MQTT_CONFIG.publishTopic;
+
+        var prevBroker = MQTT_CONFIG.brokerUrl;
+        var prevSub = MQTT_CONFIG.topic;
+
+        MQTT_CONFIG.brokerUrl = nextBroker;
+        MQTT_CONFIG.topic = nextSub;
+        MQTT_CONFIG.publishTopic = nextPub;
+
+        if (!window.tefaMqttClient || prevBroker !== nextBroker) {
+            initMqttClient();
+            return;
+        }
+
+        if (prevSub !== nextSub && window.tefaMqttClient.connected) {
+            try {
+                if (typeof window.tefaMqttClient.unsubscribe === 'function') {
+                    window.tefaMqttClient.unsubscribe(prevSub);
+                }
+                window.tefaMqttClient.subscribe(nextSub, { qos: 0 }, function (err) {
+                    if (err) {
+                        console.error('[TeFa MQTT] Gagal subscribe ke topik baru:', err);
+                        setConnectionUI('Error', 'Gagal subscribe', false);
+                    } else {
+                        console.log('[TeFa MQTT] Topik subscribe diganti ke ' + nextSub);
+                        setConnectionUI('Online', 'Menunggu data...', true);
+                    }
+                });
+            } catch (e) {
+                initMqttClient();
+            }
+        }
+    };
+
     function initChartControls() {
         var rangeTabs = document.getElementById('rangeTabs');
         if (rangeTabs) {
@@ -1180,8 +1289,22 @@
     }
 
     function init() {
+        loadSavedMqttConfig();
         initChartControls();
         initMqttClient();
+
+        window.addEventListener('storage', function (e) {
+            if (e.key === 'tefa_dashboard_settings' && typeof window.updateMqttConnectionConfig === 'function') {
+                try {
+                    var updated = JSON.parse(e.newValue || '{}');
+                    window.updateMqttConnectionConfig({
+                        brokerUrl: updated.mqttBroker,
+                        topic: updated.mqttTopicSub,
+                        publishTopic: updated.mqttTopicPub
+                    });
+                } catch (err) { }
+            }
+        });
     }
 
     if (document.readyState === 'loading') {
