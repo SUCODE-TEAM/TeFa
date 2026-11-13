@@ -57,84 +57,71 @@
                 });
             }
     
-            // Unified Navigation Scrollspy & Sliding Indicator
+            // Smooth Nav Indicator & Unified Scrollspy Logic
             var navContainer = document.getElementById('navLinksContainer');
             var navIndicator = document.getElementById('navIndicator');
             var navLinks = document.querySelectorAll('.nav-links a');
+            var isUserClicking = false;
+            var clickTimer = null;
             var spySectionIds = ['top', 'telemetri', 'hardware', 'aws'];
-            var isUserNavClick = false;
-            var navClickTimer = null;
-            var currentNavSection = 'top';
+            var currentActiveSectionId = 'top';
 
             function moveNavIndicator(targetLink) {
                 if (!navIndicator || !navContainer) return;
+                if (navContainer.offsetParent === null) return; // Hidden on mobile/tablet
                 var activeLink = targetLink || navContainer.querySelector('a.active') || navLinks[0];
-                if (activeLink && activeLink.offsetParent !== null) {
+                if (activeLink) {
                     var cRect = navContainer.getBoundingClientRect();
                     var lRect = activeLink.getBoundingClientRect();
-                    navIndicator.style.left = (lRect.left - cRect.left) + 'px';
-                    navIndicator.style.width = lRect.width + 'px';
+                    if (lRect.width > 0) {
+                        navIndicator.style.left = (lRect.left - cRect.left) + 'px';
+                        navIndicator.style.width = lRect.width + 'px';
+                    }
                 }
             }
 
-            function syncActiveSection(secId, shouldMoveIndicator) {
-                currentNavSection = secId;
-                var desktopLinks = document.querySelectorAll('.nav-links a');
-                var mobileLinks = document.querySelectorAll('.mobile-nav-link');
-                var targetDesktopLink = null;
-
-                desktopLinks.forEach(function(l) {
-                    if (l.getAttribute('href') === '#' + secId) {
-                        l.classList.add('active');
-                        targetDesktopLink = l;
-                    } else {
-                        l.classList.remove('active');
-                    }
-                });
-
-                mobileLinks.forEach(function(ml) {
-                    if (ml.getAttribute('href') === '#' + secId) {
-                        ml.classList.add('active');
-                    } else {
-                        ml.classList.remove('active');
-                    }
-                });
-
-                if (shouldMoveIndicator !== false && targetDesktopLink) {
-                    moveNavIndicator(targetDesktopLink);
-                }
-            }
-            window.syncActiveSection = syncActiveSection;
-            window.setNavClicking = function(state) {
-                isUserNavClick = state;
-            };
-
-            // Indicator initialization and resize handling
-            window.addEventListener('load', function() { moveNavIndicator(); });
+            moveNavIndicator();
+            window.addEventListener('load', function() { moveNavIndicator(); handleScrollSpy(); });
             window.addEventListener('resize', function() { moveNavIndicator(); });
-            setTimeout(function() { moveNavIndicator(); }, 100);
-            setTimeout(function() { moveNavIndicator(); }, 300);
-            setTimeout(function() { moveNavIndicator(); }, 600);
             if (document.fonts && document.fonts.ready) {
                 document.fonts.ready.then(function() { moveNavIndicator(); });
             }
+            setTimeout(function() { moveNavIndicator(); handleScrollSpy(); }, 50);
+            setTimeout(function() { moveNavIndicator(); handleScrollSpy(); }, 250);
 
-            // Desktop nav click handling
+            // Release click lock immediately if user manually scrolls with mouse wheel or touch
+            function releaseClickLock() {
+                if (isUserClicking) {
+                    isUserClicking = false;
+                    clearTimeout(clickTimer);
+                }
+            }
+            window.addEventListener('wheel', releaseClickLock, { passive: true });
+            window.addEventListener('touchmove', releaseClickLock, { passive: true });
+
+            // Smooth scroll on desktop nav link click
             navLinks.forEach(function(link) {
                 link.addEventListener('click', function(e) {
-                    var targetHref = this.getAttribute('href');
-                    if (targetHref && targetHref.startsWith('#')) {
+                    var targetId = this.getAttribute('href');
+                    if (targetId && targetId.startsWith('#')) {
                         e.preventDefault();
-                        var secId = targetHref.substring(1);
-                        var targetEl = document.getElementById(secId);
+                        var targetEl = document.getElementById(targetId.substring(1));
                         if (targetEl) {
-                            isUserNavClick = true;
-                            clearTimeout(navClickTimer);
+                            isUserClicking = true;
+                            clearTimeout(clickTimer);
 
-                            syncActiveSection(secId, true);
+                            navLinks.forEach(function(l) { l.classList.remove('active'); });
+                            this.classList.add('active');
+                            moveNavIndicator(this);
+
+                            var mobileNavLinks = document.querySelectorAll('.mobile-nav-link');
+                            mobileNavLinks.forEach(function(ml) {
+                                if (ml.getAttribute('href') === targetId) ml.classList.add('active');
+                                else ml.classList.remove('active');
+                            });
 
                             var topRow = document.querySelector('.top-row');
-                            var navHeight = topRow ? topRow.offsetHeight + 24 : 86;
+                            var navHeight = topRow ? topRow.offsetHeight + 20 : 80;
                             var elementPosition = targetEl.getBoundingClientRect().top;
                             var offsetPosition = elementPosition + window.pageYOffset - navHeight;
 
@@ -143,16 +130,17 @@
                                 behavior: 'smooth'
                             });
 
-                            navClickTimer = setTimeout(function() {
-                                isUserNavClick = false;
+                            currentActiveSectionId = targetId.substring(1);
+                            clickTimer = setTimeout(function() {
+                                isUserClicking = false;
                             }, 850);
                         }
                     }
                 });
             });
 
-            // Single unified scroll listener
-            window.addEventListener('scroll', function() {
+            // Single unified scrollspy calculation
+            function handleScrollSpy() {
                 var topRow = document.querySelector('.top-row');
                 if (topRow) {
                     if (window.scrollY > 15) {
@@ -162,42 +150,68 @@
                     }
                 }
 
-                if (isUserNavClick) return;
+                if (isUserClicking) return;
 
-                var topRowHeight = topRow ? topRow.offsetHeight : 80;
-                var threshold = topRowHeight + 110;
-                var currentId = 'top';
+                var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                var winHeight = window.innerHeight;
+                var docHeight = document.documentElement.scrollHeight;
+                var topRowHeight = topRow ? topRow.offsetHeight : 70;
+                var triggerOffset = scrollY + topRowHeight + 120;
 
-                // Check if user scrolled to bottom of page (forcing AWS)
-                var scrollBottom = window.innerHeight + window.pageYOffset;
-                var docHeight = Math.max(
-                    document.body.scrollHeight,
-                    document.documentElement.scrollHeight,
-                    document.body.offsetHeight,
-                    document.documentElement.offsetHeight
-                );
-                var isAtBottom = scrollBottom >= (docHeight - 70);
+                var targetId = spySectionIds[0];
 
-                if (isAtBottom) {
-                    currentId = 'aws';
-                } else if (window.pageYOffset < 60) {
-                    currentId = 'top';
+                if (scrollY + winHeight >= docHeight - 50) {
+                    targetId = spySectionIds[spySectionIds.length - 1];
+                } else if (scrollY < 60) {
+                    targetId = spySectionIds[0];
                 } else {
-                    spySectionIds.forEach(function(id) {
-                        var el = document.getElementById(id);
+                    for (var i = 0; i < spySectionIds.length; i++) {
+                        var el = document.getElementById(spySectionIds[i]);
                         if (el) {
-                            var r = el.getBoundingClientRect();
-                            if (r.top <= threshold) {
-                                currentId = id;
+                            var absTop = el.getBoundingClientRect().top + scrollY;
+                            if (absTop <= triggerOffset) {
+                                targetId = spySectionIds[i];
                             }
                         }
-                    });
+                    }
                 }
 
-                if (currentId !== currentNavSection) {
-                    syncActiveSection(currentId, true);
-                } else if (navIndicator && (!navIndicator.style.width || navIndicator.style.width === '0px')) {
-                    moveNavIndicator();
+                if (targetId !== currentActiveSectionId) {
+                    currentActiveSectionId = targetId;
+
+                    var activeLink = null;
+                    navLinks.forEach(function(link) {
+                        if (link.getAttribute('href') === '#' + targetId) {
+                            link.classList.add('active');
+                            activeLink = link;
+                        } else {
+                            link.classList.remove('active');
+                        }
+                    });
+
+                    var mobileNavLinks = document.querySelectorAll('.mobile-nav-link');
+                    mobileNavLinks.forEach(function(ml) {
+                        if (ml.getAttribute('href') === '#' + targetId) {
+                            ml.classList.add('active');
+                        } else {
+                            ml.classList.remove('active');
+                        }
+                    });
+
+                    if (activeLink) {
+                        moveNavIndicator(activeLink);
+                    }
+                }
+            }
+
+            var scrollTicking = false;
+            window.addEventListener('scroll', function() {
+                if (!scrollTicking) {
+                    window.requestAnimationFrame(function() {
+                        handleScrollSpy();
+                        scrollTicking = false;
+                    });
+                    scrollTicking = true;
                 }
             }, { passive: true });
 
@@ -1175,16 +1189,20 @@
                             var secId = targetId.substring(1);
                             var targetEl = document.getElementById(secId);
 
+                            mobileNavLinks.forEach(function(l) { l.classList.remove('active'); });
+                            this.classList.add('active');
+
+                            navLinks.forEach(function(dl) {
+                                if (dl.getAttribute('href') === targetId) {
+                                    navLinks.forEach(function(l) { l.classList.remove('active'); });
+                                    dl.classList.add('active');
+                                    moveNavIndicator(dl);
+                                }
+                            });
+
                             closeDropdown();
 
                             if (targetEl) {
-                                if (window.setNavClicking) {
-                                    window.setNavClicking(true);
-                                }
-                                if (window.syncActiveSection) {
-                                    window.syncActiveSection(secId, true);
-                                }
-
                                 var topRow = document.querySelector('.top-row');
                                 var navHeight = topRow ? topRow.offsetHeight + 16 : 76;
                                 var elementPosition = targetEl.getBoundingClientRect().top;
@@ -1196,12 +1214,6 @@
                                         behavior: 'smooth'
                                     });
                                 }, 100);
-
-                                setTimeout(function() {
-                                    if (window.setNavClicking) {
-                                        window.setNavClicking(false);
-                                    }
-                                }, 900);
                             }
                         }
                     });
