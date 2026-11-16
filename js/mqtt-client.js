@@ -5,13 +5,15 @@
     var DEFAULT_MQTT_CONFIG = {
         brokerUrl: 'wss://broker.emqx.io:8084/mqtt',
         topic: 'tefa/hidroponik/sensor',
-        publishTopic: 'tefa/hidroponik/aktuator'
+        publishTopic: 'tefa/hidroponik/control',
+        statusTopic: 'tefa/hidroponik/status'
     };
 
     var MQTT_CONFIG = {
         brokerUrl: DEFAULT_MQTT_CONFIG.brokerUrl,
         topic: DEFAULT_MQTT_CONFIG.topic,
         publishTopic: DEFAULT_MQTT_CONFIG.publishTopic,
+        statusTopic: DEFAULT_MQTT_CONFIG.statusTopic,
         options: {
             clientId: 'tefa_web_' + Math.random().toString(16).slice(2, 10),
             protocolId: 'MQTT',
@@ -67,17 +69,24 @@
             var saved = JSON.parse(localStorage.getItem('tefa_dashboard_settings') || '{}');
             MQTT_CONFIG.brokerUrl = normalizeBrokerUrl(saved.mqttBroker || DEFAULT_MQTT_CONFIG.brokerUrl);
             MQTT_CONFIG.topic = (saved.mqttTopicSub && saved.mqttTopicSub.trim()) || DEFAULT_MQTT_CONFIG.topic;
-            MQTT_CONFIG.publishTopic = (saved.mqttTopicPub && saved.mqttTopicPub.trim()) || DEFAULT_MQTT_CONFIG.publishTopic;
+            var savedPub = saved.mqttTopicPub && saved.mqttTopicPub.trim();
+            if (savedPub === 'tefa/hidroponik/aktuator') {
+                savedPub = DEFAULT_MQTT_CONFIG.publishTopic;
+            }
+            MQTT_CONFIG.publishTopic = savedPub || DEFAULT_MQTT_CONFIG.publishTopic;
+            MQTT_CONFIG.statusTopic = (saved.mqttTopicStatus && saved.mqttTopicStatus.trim()) || DEFAULT_MQTT_CONFIG.statusTopic;
         } catch (e) {
             MQTT_CONFIG.brokerUrl = DEFAULT_MQTT_CONFIG.brokerUrl;
             MQTT_CONFIG.topic = DEFAULT_MQTT_CONFIG.topic;
             MQTT_CONFIG.publishTopic = DEFAULT_MQTT_CONFIG.publishTopic;
+            MQTT_CONFIG.statusTopic = DEFAULT_MQTT_CONFIG.statusTopic;
         }
     }
 
     var STORAGE_KEY_LOG = 'tefa_telemetry_log_v1';
     var minWaterTemp = null;
     var maxWaterTemp = null;
+    var lastDeviceStatus = null;
     var telemetryHistory = []; // live short buffer for AWS bars
     var telemetryLog = loadTelemetryLog();
     var pendingSettingsPayload = null;
@@ -739,17 +748,21 @@
                 if (s3) { s3.textContent = 'Aktif'; s3.classList.remove('off'); }
             }
 
-            // Relay 8CH / system_status
-            var v4 = hwItems[4].querySelector('.v');
-            var s4 = hwItems[4].querySelector('.s');
-            var sys = payload.system_status || null;
-            if (v4) {
-                v4.textContent = (sys && sys.pompa) ? ('Pompa ' + String(sys.pompa).toUpperCase()) : 'Standby';
-                v4.classList.remove('off');
-            }
-            if (s4) {
-                s4.textContent = (sys && sys.deepsleep_sec !== undefined) ? ('DeepSleep ' + sys.deepsleep_sec + 's') : 'Terhubung';
-                s4.classList.remove('off');
+            // Relay 8CH / Device Status
+            if (lastDeviceStatus) {
+                renderHeroRelayStatus(lastDeviceStatus);
+            } else {
+                var v4 = hwItems[4].querySelector('.v');
+                var s4 = hwItems[4].querySelector('.s');
+                var sys = payload.system_status || null;
+                if (v4) {
+                    v4.textContent = (sys && sys.pompa) ? ('Pompa ' + String(sys.pompa).toUpperCase()) : 'Standby';
+                    v4.classList.remove('off');
+                }
+                if (s4) {
+                    s4.textContent = (sys && sys.deepsleep_sec !== undefined) ? ('DeepSleep ' + sys.deepsleep_sec + 's') : 'Terhubung';
+                    s4.classList.remove('off');
+                }
             }
         }
 
@@ -1112,6 +1125,87 @@
         window.setAwsHistoryData('monthly', monthlyRows);
     }
 
+    function renderHeroRelayStatus(payload) {
+        if (!payload || typeof payload !== 'object') return;
+        var hwItems = document.querySelectorAll('.hero .hw > div');
+        if (hwItems.length < 5) return;
+
+        var v4 = hwItems[4].querySelector('.v');
+        var s4 = hwItems[4].querySelector('.s');
+        var ps = (payload.pumps_status && typeof payload.pumps_status === 'object') ? payload.pumps_status : null;
+
+        if (v4) {
+            if (ps) {
+                var pumpKeys = Object.keys(ps);
+                var activeCount = 0;
+                pumpKeys.forEach(function (k) {
+                    if (String(ps[k]).toUpperCase() === 'ON') activeCount++;
+                });
+                var onlyBigOn = activeCount === 1 && String(ps.pump_big).toUpperCase() === 'ON';
+                if (activeCount === 0) {
+                    v4.textContent = 'Semua OFF';
+                } else if (onlyBigOn) {
+                    v4.textContent = 'Pump Big ON';
+                } else {
+                    v4.textContent = activeCount + '/' + pumpKeys.length + ' Pompa ON';
+                }
+            } else {
+                v4.textContent = 'Terhubung';
+            }
+            v4.classList.remove('off');
+        }
+
+        if (s4) {
+            if (payload.active_interval_minutes !== undefined && payload.active_interval_minutes !== null) {
+                s4.textContent = 'Interval ' + payload.active_interval_minutes + ' mnt';
+            } else {
+                s4.textContent = payload.status_message || 'Terhubung';
+            }
+            s4.classList.remove('off');
+        }
+
+        if (ps) {
+            hwItems[4].title = (payload.status_message ? payload.status_message + ' · ' : '') +
+                'A:' + (ps.pump_A || '-') +
+                ' B:' + (ps.pump_B || '-') +
+                ' UP:' + (ps.pump_up || '-') +
+                ' DN:' + (ps.pump_down || '-') +
+                ' BIG:' + (ps.pump_big || '-');
+        } else if (payload.status_message) {
+            hwItems[4].title = payload.status_message;
+        }
+    }
+
+    function updateDeviceStatusUI(payload) {
+        if (!payload || typeof payload !== 'object') return;
+        lastDeviceStatus = payload;
+
+        var uptimeEl = document.getElementById('uptime');
+        if (uptimeEl) uptimeEl.textContent = formatWibTime(payload.timestamp) + ' WIB';
+
+        var hwItems = document.querySelectorAll('.hero .hw > div');
+        if (hwItems.length > 0) {
+            var v0 = hwItems[0].querySelector('.v');
+            var s0 = hwItems[0].querySelector('.s');
+            if (v0) {
+                v0.textContent = 'Online';
+                v0.classList.remove('off');
+            }
+            if (s0) {
+                if (s0.textContent.indexOf('WiFi ') !== 0) {
+                    s0.textContent = payload.device_id || 'Terhubung';
+                }
+                s0.classList.remove('off');
+            }
+        }
+
+        renderHeroRelayStatus(payload);
+
+        if (typeof window.syncAdminPumpsUI === 'function') {
+            window.syncAdminPumpsUI(payload.pumps_status, payload.active_interval_minutes, payload);
+        }
+    }
+
     function initMqttClient() {
         if (typeof mqtt === 'undefined') {
             console.warn('[TeFa MQTT] Library mqtt.min.js belum termuat.');
@@ -1137,17 +1231,27 @@
         var client = mqtt.connect(MQTT_CONFIG.brokerUrl, MQTT_CONFIG.options);
 
         client.on('connect', function () {
-            console.log('[TeFa MQTT] Terhubung ke ' + MQTT_CONFIG.brokerUrl + '! Subscribe topik: ' + MQTT_CONFIG.topic);
+            console.log('[TeFa MQTT] Terhubung ke ' + MQTT_CONFIG.brokerUrl + '! Subscribe topik: ' + MQTT_CONFIG.topic + ' & ' + MQTT_CONFIG.statusTopic);
             setConnectionUI('Online', 'Menunggu data...', true);
 
             client.subscribe(MQTT_CONFIG.topic, { qos: 0 }, function (err) {
                 if (err) {
-                    console.error('[TeFa MQTT] Gagal subscribe:', err);
+                    console.error('[TeFa MQTT] Gagal subscribe sensor:', err);
                     setConnectionUI('Error', 'Gagal subscribe', false);
                 } else {
                     console.log('[TeFa MQTT] Berhasil subscribe ke ' + MQTT_CONFIG.topic);
                 }
             });
+
+            if (MQTT_CONFIG.statusTopic && MQTT_CONFIG.statusTopic !== MQTT_CONFIG.topic) {
+                client.subscribe(MQTT_CONFIG.statusTopic, { qos: 0 }, function (err) {
+                    if (err) {
+                        console.error('[TeFa MQTT] Gagal subscribe status:', err);
+                    } else {
+                        console.log('[TeFa MQTT] Berhasil subscribe ke ' + MQTT_CONFIG.statusTopic);
+                    }
+                });
+            }
 
             if (pendingSettingsPayload !== null) {
                 var queuedPayload = pendingSettingsPayload;
@@ -1161,7 +1265,12 @@
                 var raw = message.toString();
                 var data = JSON.parse(raw);
                 console.log('[TeFa MQTT] Data diterima dari ' + topic + ':', data);
-                updateDashboardUI(data);
+                if (topic === MQTT_CONFIG.statusTopic || (data && (data.pumps_status || data.status_message !== undefined))) {
+                    updateDeviceStatusUI(data);
+                }
+                if (data && Array.isArray(data.sensors)) {
+                    updateDashboardUI(data);
+                }
             } catch (e) {
                 console.error('[TeFa MQTT] Gagal parsing JSON:', e);
             }
@@ -1216,35 +1325,59 @@
         var nextBroker = normalizeBrokerUrl((cfg && cfg.brokerUrl) || DEFAULT_MQTT_CONFIG.brokerUrl);
         var nextSub = (cfg && cfg.topic ? String(cfg.topic).trim() : '') || DEFAULT_MQTT_CONFIG.topic;
         var nextPub = (cfg && cfg.publishTopic ? String(cfg.publishTopic).trim() : '') || DEFAULT_MQTT_CONFIG.publishTopic;
+        var nextStatus = (cfg && cfg.statusTopic ? String(cfg.statusTopic).trim() : '') || DEFAULT_MQTT_CONFIG.statusTopic;
 
         var prevBroker = MQTT_CONFIG.brokerUrl;
         var prevSub = MQTT_CONFIG.topic;
+        var prevStatus = MQTT_CONFIG.statusTopic;
 
         MQTT_CONFIG.brokerUrl = nextBroker;
         MQTT_CONFIG.topic = nextSub;
         MQTT_CONFIG.publishTopic = nextPub;
+        MQTT_CONFIG.statusTopic = nextStatus;
 
         if (!window.tefaMqttClient || prevBroker !== nextBroker) {
             initMqttClient();
             return;
         }
 
-        if (prevSub !== nextSub && window.tefaMqttClient.connected) {
-            try {
-                if (typeof window.tefaMqttClient.unsubscribe === 'function') {
-                    window.tefaMqttClient.unsubscribe(prevSub);
-                }
-                window.tefaMqttClient.subscribe(nextSub, { qos: 0 }, function (err) {
-                    if (err) {
-                        console.error('[TeFa MQTT] Gagal subscribe ke topik baru:', err);
-                        setConnectionUI('Error', 'Gagal subscribe', false);
-                    } else {
-                        console.log('[TeFa MQTT] Topik subscribe diganti ke ' + nextSub);
-                        setConnectionUI('Online', 'Menunggu data...', true);
+        if (window.tefaMqttClient.connected) {
+            if (prevSub !== nextSub) {
+                try {
+                    if (typeof window.tefaMqttClient.unsubscribe === 'function') {
+                        window.tefaMqttClient.unsubscribe(prevSub);
                     }
-                });
-            } catch (e) {
-                initMqttClient();
+                    window.tefaMqttClient.subscribe(nextSub, { qos: 0 }, function (err) {
+                        if (err) {
+                            console.error('[TeFa MQTT] Gagal subscribe ke topik baru:', err);
+                            setConnectionUI('Error', 'Gagal subscribe', false);
+                        } else {
+                            console.log('[TeFa MQTT] Topik subscribe diganti ke ' + nextSub);
+                            setConnectionUI('Online', 'Menunggu data...', true);
+                        }
+                    });
+                } catch (e) {
+                    initMqttClient();
+                    return;
+                }
+            }
+            if (prevStatus !== nextStatus) {
+                try {
+                    if (prevStatus && typeof window.tefaMqttClient.unsubscribe === 'function') {
+                        window.tefaMqttClient.unsubscribe(prevStatus);
+                    }
+                    if (nextStatus && nextStatus !== nextSub) {
+                        window.tefaMqttClient.subscribe(nextStatus, { qos: 0 }, function (err) {
+                            if (err) {
+                                console.error('[TeFa MQTT] Gagal subscribe ke topik status baru:', err);
+                            } else {
+                                console.log('[TeFa MQTT] Topik status diganti ke ' + nextStatus);
+                            }
+                        });
+                    }
+                } catch (e) {
+                    initMqttClient();
+                }
             }
         }
     };
@@ -1300,7 +1433,8 @@
                     window.updateMqttConnectionConfig({
                         brokerUrl: updated.mqttBroker,
                         topic: updated.mqttTopicSub,
-                        publishTopic: updated.mqttTopicPub
+                        publishTopic: updated.mqttTopicPub,
+                        statusTopic: updated.mqttTopicStatus
                     });
                 } catch (err) { }
             }

@@ -105,7 +105,7 @@
             <div>
                 <div style="color:#fff;font-size:20px;font-weight:600;opacity:0">.</div>
                 <h1>Hardware Health</h1>
-                <div class="uptime"><b id="uptime">--:--:--</b><span>UPTIME</span></div>
+                <div class="uptime"><b id="uptime">--:--:--</b><span>LAST UPDATE</span></div>
             </div>
             <div class="hw">
                 <div>
@@ -299,9 +299,9 @@
             </div>
             <div class="relay-grid" id="relayGrid">
                 <!-- Relay 1 -->
-                <div class="relay-card" data-relay="1" data-state="off" data-seconds="0">
+                <div class="relay-card" data-relay="1" data-pump="pump_A" data-state="off" data-seconds="0">
                     <div class="relay-card-top">
-                        <span class="relay-eyebrow">RELAY 1</span>
+                        <span class="relay-eyebrow">RELAY 1 · PUMP A</span>
                         <div class="relay-toggle" role="switch" aria-checked="false" tabindex="0">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 3v8" />
@@ -310,14 +310,14 @@
                         </div>
                     </div>
                     <div class="relay-card-body">
-                        <h4>Nutrient Pump</h4>
+                        <h4>Nutrient Pump A</h4>
                         <div class="relay-status">Mati</div>
                     </div>
                 </div>
                 <!-- Relay 2 -->
-                <div class="relay-card" data-relay="2" data-state="off" data-seconds="0">
+                <div class="relay-card" data-relay="2" data-pump="pump_B" data-state="off" data-seconds="0">
                     <div class="relay-card-top">
-                        <span class="relay-eyebrow">RELAY 2</span>
+                        <span class="relay-eyebrow">RELAY 2 · PUMP B</span>
                         <div class="relay-toggle" role="switch" aria-checked="false" tabindex="0">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 3v8" />
@@ -326,30 +326,14 @@
                         </div>
                     </div>
                     <div class="relay-card-body">
-                        <h4>Aerator</h4>
+                        <h4>Nutrient Pump B</h4>
                         <div class="relay-status">Mati</div>
                     </div>
                 </div>
                 <!-- Relay 3 -->
-                <div class="relay-card" data-relay="3" data-state="off" data-seconds="0">
+                <div class="relay-card" data-relay="3" data-pump="pump_up" data-state="off" data-seconds="0">
                     <div class="relay-card-top">
-                        <span class="relay-eyebrow">RELAY 3</span>
-                        <div class="relay-toggle" role="switch" aria-checked="false" tabindex="0">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 3v8" />
-                                <path d="M17.66 6.34a8 8 0 1 1-11.32 0" />
-                            </svg>
-                        </div>
-                    </div>
-                    <div class="relay-card-body">
-                        <h4>Grow Light</h4>
-                        <div class="relay-status">Mati</div>
-                    </div>
-                </div>
-                <!-- Relay 4 -->
-                <div class="relay-card" data-relay="4" data-state="off" data-seconds="0">
-                    <div class="relay-card-top">
-                        <span class="relay-eyebrow">RELAY 4</span>
+                        <span class="relay-eyebrow">RELAY 3 · PUMP UP</span>
                         <div class="relay-toggle" role="switch" aria-checked="false" tabindex="0">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 3v8" />
@@ -362,10 +346,10 @@
                         <div class="relay-status">Mati</div>
                     </div>
                 </div>
-                <!-- Relay 5 -->
-                <div class="relay-card" data-relay="5" data-state="off" data-seconds="0">
+                <!-- Relay 4 -->
+                <div class="relay-card" data-relay="4" data-pump="pump_down" data-state="off" data-seconds="0">
                     <div class="relay-card-top">
-                        <span class="relay-eyebrow">RELAY 5</span>
+                        <span class="relay-eyebrow">RELAY 4 · PUMP DOWN</span>
                         <div class="relay-toggle" role="switch" aria-checked="false" tabindex="0">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 3v8" />
@@ -378,10 +362,10 @@
                         <div class="relay-status">Mati</div>
                     </div>
                 </div>
-                <!-- Relay 6 -->
-                <div class="relay-card" data-relay="6" data-state="off" data-seconds="0">
+                <!-- Relay 5 -->
+                <div class="relay-card" data-relay="5" data-pump="pump_big" data-state="off" data-seconds="0">
                     <div class="relay-card-top">
-                        <span class="relay-eyebrow">RELAY 6</span>
+                        <span class="relay-eyebrow">RELAY 5 · PUMP BIG</span>
                         <div class="relay-toggle" role="switch" aria-checked="false" tabindex="0">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 3v8" />
@@ -390,15 +374,31 @@
                         </div>
                     </div>
                     <div class="relay-card-body">
-                        <h4>Exhaust Fan</h4>
+                        <h4>Main Pump (Big)</h4>
                         <div class="relay-status">Mati</div>
+                    </div>
+                </div>
+                <!-- Relay 6 -->
+                <div class="relay-card relay-disabled" data-relay="6" data-state="off" data-seconds="0" data-disabled="true" aria-disabled="true">
+                    <div class="relay-card-top">
+                        <span class="relay-eyebrow">RELAY 6</span>
+                        <div class="relay-toggle" role="switch" aria-checked="false" aria-disabled="true" tabindex="-1">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 3v8" />
+                                <path d="M17.66 6.34a8 8 0 1 1-11.32 0" />
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="relay-card-body">
+                        <h4>Coming Soon</h4>
+                        <div class="relay-status">Coming Soon</div>
                     </div>
                 </div>
                 <!-- Relay 7 -->
-                <div class="relay-card" data-relay="7" data-state="off" data-seconds="0">
+                <div class="relay-card relay-disabled" data-relay="7" data-state="off" data-seconds="0" data-disabled="true" aria-disabled="true">
                     <div class="relay-card-top">
                         <span class="relay-eyebrow">RELAY 7</span>
-                        <div class="relay-toggle" role="switch" aria-checked="false" tabindex="0">
+                        <div class="relay-toggle" role="switch" aria-checked="false" aria-disabled="true" tabindex="-1">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 3v8" />
                                 <path d="M17.66 6.34a8 8 0 1 1-11.32 0" />
@@ -406,15 +406,15 @@
                         </div>
                     </div>
                     <div class="relay-card-body">
-                        <h4>Misting</h4>
-                        <div class="relay-status">Mati</div>
+                        <h4>Coming Soon</h4>
+                        <div class="relay-status">Coming Soon</div>
                     </div>
                 </div>
                 <!-- Relay 8 -->
-                <div class="relay-card" data-relay="8" data-state="off" data-seconds="0">
+                <div class="relay-card relay-disabled" data-relay="8" data-state="off" data-seconds="0" data-disabled="true" aria-disabled="true">
                     <div class="relay-card-top">
                         <span class="relay-eyebrow">RELAY 8</span>
-                        <div class="relay-toggle" role="switch" aria-checked="false" tabindex="0">
+                        <div class="relay-toggle" role="switch" aria-checked="false" aria-disabled="true" tabindex="-1">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 3v8" />
                                 <path d="M17.66 6.34a8 8 0 1 1-11.32 0" />
@@ -422,8 +422,8 @@
                         </div>
                     </div>
                     <div class="relay-card-body">
-                        <h4>Reserve</h4>
-                        <div class="relay-status">Mati</div>
+                        <h4>Coming Soon</h4>
+                        <div class="relay-status">Coming Soon</div>
                     </div>
                 </div>
             </div>
@@ -818,9 +818,9 @@
                     <div class="setting-field">
                         <label class="setting-label">pH Min / Max</label>
                         <div class="setting-range-wrap">
-                            <input type="text" class="setting-input setting-input-range" id="set_ph_min" value="5,5" />
+                            <input type="text" class="setting-input setting-input-range" id="set_ph_min" value="5.5" />
                             <span class="setting-range-sep">-</span>
-                            <input type="text" class="setting-input setting-input-range" id="set_ph_max" value="6,5" />
+                            <input type="text" class="setting-input setting-input-range" id="set_ph_max" value="6.5" />
                         </div>
                     </div>
                     <div class="setting-field">
@@ -856,9 +856,15 @@
                 <!-- Section: Koneksi Broker & Topik MQTT -->
                 <div class="setting-section">
                     <h3 class="setting-section-title">Koneksi Broker &amp; Topik MQTT</h3>
-                    <div class="setting-field">
-                        <label class="setting-label">Broker MQTT (WebSocket URL / Host)</label>
-                        <input type="text" class="setting-input" id="set_mqtt_broker" value="wss://broker.emqx.io:8084/mqtt" placeholder="wss://broker.emqx.io:8084/mqtt" />
+                    <div class="setting-grid-2">
+                        <div class="setting-field">
+                            <label class="setting-label">Broker MQTT (WebSocket URL / Host)</label>
+                            <input type="text" class="setting-input" id="set_mqtt_broker" value="wss://broker.emqx.io:8084/mqtt" placeholder="wss://broker.emqx.io:8084/mqtt" />
+                        </div>
+                        <div class="setting-field">
+                            <label class="setting-label">Topik Subscribe (Status)</label>
+                            <input type="text" class="setting-input" id="set_mqtt_topic_status" value="tefa/hidroponik/status" placeholder="tefa/hidroponik/status" />
+                        </div>
                     </div>
                     <div class="setting-grid-2" style="margin-top:12px;">
                         <div class="setting-field">
@@ -866,31 +872,23 @@
                             <input type="text" class="setting-input" id="set_mqtt_topic_sub" value="tefa/hidroponik/sensor" placeholder="tefa/hidroponik/sensor" />
                         </div>
                         <div class="setting-field">
-                            <label class="setting-label">Topik Publish (Aktuator)</label>
-                            <input type="text" class="setting-input" id="set_mqtt_topic_pub" value="tefa/hidroponik/aktuator" placeholder="tefa/hidroponik/aktuator" />
+                            <label class="setting-label">Topik Publish (Control)</label>
+                            <input type="text" class="setting-input" id="set_mqtt_topic_pub" value="tefa/hidroponik/control" placeholder="tefa/hidroponik/control" />
                         </div>
                     </div>
                 </div>
 
-                <!-- Section: Kontrol & Dosis Hidroponik (Publish MQTT) -->
+                <!-- Section: Dosis & Interval Hidroponik (MQTT) -->
                 <div class="setting-section">
-                    <h3 class="setting-section-title">Kontrol &amp; Dosis Hidroponik (MQTT)</h3>
+                    <h3 class="setting-section-title">Dosis &amp; Interval Hidroponik (MQTT)</h3>
                     <div class="setting-grid-2">
                         <div class="setting-field">
-                            <label class="setting-label">Status Pompa</label>
-                            <div class="setting-select-wrap">
-                                <select class="setting-select" id="set_pompa">
-                                    <option value="on">ON</option>
-                                    <option value="off" selected>OFF</option>
-                                </select>
-                                <svg class="setting-select-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1B4332" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="6 9 12 15 18 9"></polyline>
-                                </svg>
-                            </div>
+                            <label class="setting-label">Interval Pengiriman (menit)</label>
+                            <input type="number" class="setting-input" id="set_interval_minutes" value="1" min="1" step="1" />
                         </div>
                         <div class="setting-field">
                             <label class="setting-label">EC Target (mS/cm)</label>
-                            <input type="text" class="setting-input" id="set_ec_target" value="1.8" />
+                            <input type="text" class="setting-input" id="set_ec_target" value="1.5" />
                         </div>
                     </div>
                     <div class="setting-grid-2" style="margin-top:12px;">
@@ -901,26 +899,6 @@
                         <div class="setting-field">
                             <label class="setting-label">pH Down Dose (detik)</label>
                             <input type="number" class="setting-input" id="set_ph_down_dose" value="2" min="0" step="1" />
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Section: Telemetry Data Injector Simulator -->
-                <div class="setting-section">
-                    <h3 class="setting-section-title">Telemetry Data Injector Simulator</h3>
-                    <div class="setting-field">
-                        <label class="setting-label">Interval Data</label>
-                        <div class="setting-select-wrap">
-                            <select class="setting-select" id="set_telemetry_interval">
-                                <option value="1">1 Detik</option>
-                                <option value="3" selected>3 Detik (Recommended)</option>
-                                <option value="5">5 Detik</option>
-                                <option value="10">10 Detik</option>
-                                <option value="30">30 Detik</option>
-                            </select>
-                            <svg class="setting-select-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1B4332" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
                         </div>
                     </div>
                 </div>

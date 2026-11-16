@@ -463,9 +463,9 @@
                 if (!aiBtn || !aiPopup) return;
 
                 var DEFAULT_ORB_HINT = 'Generate expressive prompts by speaking naturally. Ketuk orb untuk mulai bertanya dengan suara.';
-                var MIN_ORB_SIZE = 160;
+                var MIN_ORB_SIZE = 120;
                 var MAX_ORB_SIZE = 560;
-                var currentOrbSize = window.innerWidth <= 680 ? 290 : 380;
+                var currentOrbSize = window.innerWidth <= 680 ? 180 : 380;
                 var suppressOrbClick = false;
                 var ttsEnabled = true;
                 var isListening = false;
@@ -792,7 +792,10 @@
                 }
 
                 function setOrbSize(nextSize) {
-                    var maxFit = Math.min(MAX_ORB_SIZE, window.innerWidth - 40, window.innerHeight - 110);
+                    var isMobile = window.innerWidth <= 680;
+                    var maxFit = isMobile
+                        ? Math.min(240, window.innerWidth - 56, window.innerHeight - 130)
+                        : Math.min(MAX_ORB_SIZE, window.innerWidth - 40, window.innerHeight - 110);
                     var upper = Math.max(MIN_ORB_SIZE, maxFit);
                     currentOrbSize = Math.round(Math.min(upper, Math.max(MIN_ORB_SIZE, nextSize)));
                     if (orbCanvas) {
@@ -862,6 +865,9 @@
                     aiBtn.classList.add('hidden');
                     voicePanel.classList.add('open');
                     voicePanel.setAttribute('aria-hidden', 'false');
+                    if (window.innerWidth <= 680 && currentOrbSize > 200) {
+                        currentOrbSize = 180;
+                    }
                     setOrbSize(currentOrbSize);
                     if (aiBtnVoiceOrb) aiBtnVoiceOrb.classList.add('voice-active');
                     startOrbAnimation();
@@ -2256,8 +2262,8 @@
                                     window.syncActiveSection(secId, true);
                                 }
 
-                                var topRow = document.querySelector('.top-row');
-                                var navHeight = topRow ? topRow.offsetHeight + 16 : 76;
+                                var navBar = document.querySelector('.top-row .nav');
+                                var navHeight = (navBar ? navBar.offsetHeight : 54) + 20;
                                 var elementPosition = targetEl.getBoundingClientRect().top;
                                 var offsetPosition = elementPosition + window.pageYOffset - navHeight;
 

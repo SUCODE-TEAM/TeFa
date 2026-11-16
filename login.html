@@ -557,58 +557,10 @@
             color: var(--green-dark);
         }
 
-                /* Responsive Adjustments for Mobile & Compact Screens */
-        @media (max-width: 600px) {
-            .card-anchor {
-                width: 100%;
-                max-width: 350px;
-            }
-            .title-wrapper {
-                margin-bottom: 46px;
-            }
-            .title-svg {
-                width: 180px;
-                height: 70px;
-            }
-            .login-card {
-                width: 100%;
-                height: auto;
-                min-height: 360px;
-                padding: 28px 20px 20px;
-            }
-            .loops-img {
-                top: -38px;
-                left: -24px;
-                width: 58px;
-            }
-            .sprout-img {
-                top: 2px;
-                width: 68px;
-            }
-            .swirling-leaves-img {
-                top: 290px;
-                left: 50%;
-                transform: translateX(-40%);
-                width: 360px;
-            }
-            .bottom-action-bar {
-                bottom: 8px;
-                padding: 6px 14px;
-                font-size: 11px;
-                gap: 4px;
-                flex-direction: column;
-                border-radius: 14px;
-                max-width: 90vw;
-            }
-            .bar-divider {
-                display: none;
-            }
-        }
-
         /* Short screens (laptops with small viewport height e.g. < 720px) */
         @media (max-height: 720px) {
-            .login-container {
-                padding: 8px;
+            .login-stage {
+                padding: 8px 16px 56px;
             }
             .title-wrapper {
                 margin-bottom: 40px;
@@ -627,6 +579,17 @@
             .sprout-img {
                 width: 66px;
             }
+            .swirling-leaves-img {
+                top: 270px;
+                width: 380px;
+            }
+            .bottom-action-bar {
+                bottom: 6px;
+                padding: 5px 12px;
+            }
+        }
+
+        @media (max-height: 720px) and (min-width: 601px) {
             .loops-img {
                 top: -88px;
                 left: -77.6px;
@@ -635,13 +598,64 @@
                 transform-origin: 0 0;
                 transform: rotate(11.2184deg);
             }
+        }
+
+        /* Responsive Adjustments for Mobile & Compact Screens */
+        @media (max-width: 600px) {
+            .login-stage {
+                padding: 12px 16px 64px;
+            }
+            .card-anchor {
+                width: 100%;
+                max-width: 350px;
+            }
+            .title-wrapper {
+                margin-bottom: 46px;
+            }
+            .title-svg {
+                width: 180px;
+                height: 70px;
+            }
+            .login-card {
+                width: 100%;
+                height: auto;
+                min-height: 360px;
+                padding: 28px 20px 20px;
+            }
+            .loops-img {
+                top: -36px;
+                left: -16px;
+                width: 56px;
+                height: 56px;
+            }
+            .sprout-img {
+                top: 2px;
+                width: 68px;
+            }
             .swirling-leaves-img {
-                top: 270px;
-                width: 380px;
+                top: 290px;
+                left: 50%;
+                transform: translateX(-40%);
+                width: 360px;
+            }
+            .login-toast {
+                max-width: calc(100vw - 24px);
+                padding: 10px 16px;
+                font-size: 12.5px;
+                border-radius: 16px;
+                text-align: center;
             }
             .bottom-action-bar {
-                bottom: 6px;
-                padding: 5px 12px;
+                bottom: 8px;
+                padding: 6px 14px;
+                font-size: 11px;
+                gap: 4px;
+                flex-direction: column;
+                border-radius: 14px;
+                max-width: 90vw;
+            }
+            .bar-divider {
+                display: none;
             }
         }
 

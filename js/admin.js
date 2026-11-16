@@ -56,6 +56,73 @@
         });
     }
 
+    var PUMP_KEYS = ['pump_A', 'pump_B', 'pump_up', 'pump_down', 'pump_big'];
+
+    var DEFAULT_DASHBOARD_SETTINGS = {
+        phMin: '5.5', phMax: '6.5',
+        tdsMin: '600', tdsMax: '1200',
+        tempMin: '20', tempMax: '30',
+        humMin: '50', humMax: '85',
+        mqttBroker: 'wss://broker.emqx.io:8084/mqtt',
+        mqttTopicSub: 'tefa/hidroponik/sensor',
+        mqttTopicPub: 'tefa/hidroponik/control',
+        mqttTopicStatus: 'tefa/hidroponik/status',
+        intervalMinutes: '1',
+        pump_A: 'off',
+        pump_B: 'off',
+        pump_up: 'off',
+        pump_down: 'off',
+        pump_big: 'off',
+        ecTarget: '1.5',
+        phUpDose: '2',
+        phDownDose: '2',
+        interval: '3',
+        aiProvider: 'gemini',
+        apiKey: ''
+    };
+
+    function getMergedDashboardSettings() {
+        var saved = {};
+        try {
+            saved = JSON.parse(localStorage.getItem('tefa_dashboard_settings') || '{}') || {};
+        } catch (e) {
+            saved = {};
+        }
+        var merged = Object.assign({}, DEFAULT_DASHBOARD_SETTINGS, saved);
+        if (merged.mqttTopicPub === 'tefa/hidroponik/aktuator') {
+            merged.mqttTopicPub = DEFAULT_DASHBOARD_SETTINGS.mqttTopicPub;
+        }
+        return merged;
+    }
+
+    function buildControlPayload(settingsObj) {
+        var s = settingsObj || getMergedDashboardSettings();
+        var ecParsed = parseFloat(String(s.ecTarget !== undefined ? s.ecTarget : '1.5').replace(',', '.'));
+        var phMinParsed = parseFloat(String(s.phMin !== undefined ? s.phMin : '5.5').replace(',', '.'));
+        var phMaxParsed = parseFloat(String(s.phMax !== undefined ? s.phMax : '6.5').replace(',', '.'));
+        var upDoseParsed = parseFloat(s.phUpDose);
+        var downDoseParsed = parseFloat(s.phDownDose);
+        var intervalParsed = parseInt(s.intervalMinutes, 10);
+
+        return {
+            interval_minutes: (!isNaN(intervalParsed) && intervalParsed > 0) ? intervalParsed : 1,
+            pumps: {
+                pump_A: String(s.pump_A || 'off').toLowerCase(),
+                pump_B: String(s.pump_B || 'off').toLowerCase(),
+                pump_up: String(s.pump_up || 'off').toLowerCase(),
+                pump_down: String(s.pump_down || 'off').toLowerCase(),
+                pump_big: String(s.pump_big || 'off').toLowerCase()
+            },
+            threshold: {
+                ph_min: isNaN(phMinParsed) ? 5.5 : phMinParsed,
+                ph_max: isNaN(phMaxParsed) ? 6.5 : phMaxParsed,
+                ec_target: isNaN(ecParsed) ? 1.5 : ecParsed,
+                ph_up_dose_sec: isNaN(upDoseParsed) ? 0 : upDoseParsed,
+                ph_down_dose_sec: isNaN(downDoseParsed) ? 0 : downDoseParsed
+            }
+        };
+    }
+
     // Relay Management Logic (All start OFF / Mati)
     var relayCards = document.querySelectorAll('.relay-card');
     function fmtTime(s) {
@@ -64,18 +131,26 @@
         return p(h) + ':' + p(m) + ':' + p(sec);
     }
 
-    function updateRelayUI(card, isOn) {
+    function updateRelayUI(card, isOn, intervalMinutes) {
+        if (!card || card.dataset.disabled === 'true' || card.classList.contains('relay-disabled')) {
+            return;
+        }
         var toggle = card.querySelector('.relay-toggle');
         var statusEl = card.querySelector('.relay-status');
         if (isOn) {
             card.classList.add('active');
             card.dataset.state = 'on';
             if (toggle) toggle.setAttribute('aria-checked', 'true');
-            var sec = parseInt(card.dataset.seconds, 10) || 1;
+            if (intervalMinutes !== undefined && intervalMinutes !== null) {
+                card.dataset.intervalMin = String(intervalMinutes);
+            }
+            var existingSec = parseInt(card.dataset.seconds, 10) || 0;
+            var sec = existingSec > 0 ? existingSec : 1;
             card.dataset.seconds = sec;
             if (statusEl) {
                 statusEl.style.color = 'var(--g9)';
-                statusEl.innerHTML = 'Aktif · <span class="relay-timer">' + fmtTime(sec) + '</span>';
+                statusEl.innerHTML = 'Aktif · <span class="relay-timer">' + fmtTime(sec) + '</span>' +
+                    (card.dataset.intervalMin ? ' (' + card.dataset.intervalMin + ' mnt)' : '');
             }
         } else {
             card.classList.remove('active');
@@ -89,11 +164,100 @@
         }
     }
 
+    function setRelayPendingUI(card, targetState) {
+        var statusEl = card.querySelector('.relay-status');
+        if (statusEl) {
+            statusEl.style.color = '#E65100';
+            statusEl.textContent = 'Menunggu status (' + (targetState ? 'ON' : 'OFF') + ')...';
+        }
+    }
+
+    function applyPumpsToRelayCards(pumpMap, activeIntervalMinutes) {
+        if (!pumpMap || typeof pumpMap !== 'object') return;
+        relayCards.forEach(function (card) {
+            var pumpKey = card.dataset.pump;
+            if (!pumpKey || pumpMap[pumpKey] === undefined) return;
+            var nextIsOn = String(pumpMap[pumpKey]).toLowerCase() === 'on';
+            updateRelayUI(card, nextIsOn, activeIntervalMinutes);
+        });
+    }
+
+    function publishPumpCommand(pumpOverrides) {
+        var settings = getMergedDashboardSettings();
+        var hasPumpCard = false;
+
+        relayCards.forEach(function (card) {
+            var pumpKey = card.dataset.pump;
+            if (!pumpKey || PUMP_KEYS.indexOf(pumpKey) === -1) return;
+            hasPumpCard = true;
+            if (pumpOverrides && pumpOverrides[pumpKey] !== undefined) {
+                settings[pumpKey] = pumpOverrides[pumpKey];
+            } else {
+                settings[pumpKey] = card.classList.contains('active') ? 'on' : 'off';
+            }
+        });
+
+        if (!hasPumpCard) return;
+
+        try {
+            localStorage.setItem('tefa_dashboard_settings', JSON.stringify(settings));
+        } catch (e) { }
+
+        if (typeof window.publishMqttSettings === 'function') {
+            window.publishMqttSettings(buildControlPayload(settings));
+        }
+    }
+
+    window.syncAdminPumpsUI = function (pumpsStatus, activeIntervalMinutes) {
+        var settings = getMergedDashboardSettings();
+        var updated = false;
+        var parsedInt = null;
+
+        if (activeIntervalMinutes !== undefined && activeIntervalMinutes !== null && !isNaN(Number(activeIntervalMinutes))) {
+            var candidateInt = parseInt(activeIntervalMinutes, 10);
+            if (candidateInt > 0) {
+                parsedInt = candidateInt;
+                settings.intervalMinutes = String(candidateInt);
+                var intEl = document.getElementById('set_interval_minutes');
+                if (intEl) intEl.value = settings.intervalMinutes;
+                updated = true;
+            }
+        }
+
+        if (pumpsStatus && typeof pumpsStatus === 'object') {
+            PUMP_KEYS.forEach(function (key) {
+                if (pumpsStatus[key] !== undefined) {
+                    settings[key] = String(pumpsStatus[key]).toLowerCase() === 'on' ? 'on' : 'off';
+                    updated = true;
+                }
+            });
+            applyPumpsToRelayCards(settings, parsedInt !== null ? parsedInt : activeIntervalMinutes);
+        }
+
+        if (updated) {
+            try {
+                localStorage.setItem('tefa_dashboard_settings', JSON.stringify(settings));
+            } catch (e) { }
+        }
+    };
+
     // Click event for each relay card
     relayCards.forEach(function (card) {
         card.addEventListener('click', function () {
-            var isOn = card.classList.contains('active');
-            updateRelayUI(card, !isOn);
+            if (card.dataset.disabled === 'true' || card.classList.contains('relay-disabled')) {
+                return;
+            }
+            var pumpKey = card.dataset.pump;
+            if (pumpKey && PUMP_KEYS.indexOf(pumpKey) !== -1) {
+                var targetIsOn = !card.classList.contains('active');
+                setRelayPendingUI(card, targetIsOn);
+                var overrides = {};
+                overrides[pumpKey] = targetIsOn ? 'on' : 'off';
+                publishPumpCommand(overrides);
+            } else {
+                var isOn = card.classList.contains('active');
+                updateRelayUI(card, !isOn);
+            }
         });
     });
 
@@ -104,18 +268,48 @@
     if (btnAllOn) {
         btnAllOn.addEventListener('click', function (e) {
             e.stopPropagation();
+            var pumpAffected = false;
+            var overrides = {};
             relayCards.forEach(function (card) {
-                updateRelayUI(card, true);
+                if (card.dataset.disabled === 'true' || card.classList.contains('relay-disabled')) {
+                    return;
+                }
+                var pumpKey = card.dataset.pump;
+                if (pumpKey && PUMP_KEYS.indexOf(pumpKey) !== -1) {
+                    pumpAffected = true;
+                    setRelayPendingUI(card, true);
+                    overrides[pumpKey] = 'on';
+                } else {
+                    updateRelayUI(card, true);
+                }
             });
+            if (pumpAffected) {
+                publishPumpCommand(overrides);
+            }
         });
     }
 
     if (btnAllOff) {
         btnAllOff.addEventListener('click', function (e) {
             e.stopPropagation();
+            var pumpAffected = false;
+            var overrides = {};
             relayCards.forEach(function (card) {
-                updateRelayUI(card, false);
+                if (card.dataset.disabled === 'true' || card.classList.contains('relay-disabled')) {
+                    return;
+                }
+                var pumpKey = card.dataset.pump;
+                if (pumpKey && PUMP_KEYS.indexOf(pumpKey) !== -1) {
+                    pumpAffected = true;
+                    setRelayPendingUI(card, false);
+                    overrides[pumpKey] = 'off';
+                } else {
+                    updateRelayUI(card, false);
+                }
             });
+            if (pumpAffected) {
+                publishPumpCommand(overrides);
+            }
         });
     }
 
@@ -377,22 +571,7 @@
 
         if (!gearBtn || !backdrop) return;
 
-        var defaultSettings = {
-            phMin: '5,5', phMax: '6,5',
-            tdsMin: '600', tdsMax: '1200',
-            tempMin: '20', tempMax: '30',
-            humMin: '50', humMax: '85',
-            mqttBroker: 'wss://broker.emqx.io:8084/mqtt',
-            mqttTopicSub: 'tefa/hidroponik/sensor',
-            mqttTopicPub: 'tefa/hidroponik/aktuator',
-            pompa: 'off',
-            ecTarget: '1.8',
-            phUpDose: '2',
-            phDownDose: '2',
-            interval: '3',
-            aiProvider: 'gemini',
-            apiKey: ''
-        };
+        var defaultSettings = DEFAULT_DASHBOARD_SETTINGS;
 
         var aiProviderPlaceholders = {
             gemini: 'Masukkan Gemini API Key (AIza...)...',
@@ -436,7 +615,7 @@
 
         function loadSettings() {
             try {
-                var saved = JSON.parse(localStorage.getItem('tefa_dashboard_settings') || '{}');
+                var saved = getMergedDashboardSettings();
                 document.getElementById('set_ph_min').value = saved.phMin || defaultSettings.phMin;
                 document.getElementById('set_ph_max').value = saved.phMax || defaultSettings.phMax;
                 document.getElementById('set_tds_min').value = saved.tdsMin || defaultSettings.tdsMin;
@@ -448,11 +627,12 @@
                 if (document.getElementById('set_mqtt_broker')) document.getElementById('set_mqtt_broker').value = saved.mqttBroker || defaultSettings.mqttBroker;
                 if (document.getElementById('set_mqtt_topic_sub')) document.getElementById('set_mqtt_topic_sub').value = saved.mqttTopicSub || defaultSettings.mqttTopicSub;
                 if (document.getElementById('set_mqtt_topic_pub')) document.getElementById('set_mqtt_topic_pub').value = saved.mqttTopicPub || defaultSettings.mqttTopicPub;
-                if (document.getElementById('set_pompa')) document.getElementById('set_pompa').value = saved.pompa || defaultSettings.pompa;
+                if (document.getElementById('set_mqtt_topic_status')) document.getElementById('set_mqtt_topic_status').value = saved.mqttTopicStatus || defaultSettings.mqttTopicStatus;
+                if (document.getElementById('set_interval_minutes')) document.getElementById('set_interval_minutes').value = saved.intervalMinutes || defaultSettings.intervalMinutes;
                 if (document.getElementById('set_ec_target')) document.getElementById('set_ec_target').value = saved.ecTarget || defaultSettings.ecTarget;
-                if (document.getElementById('set_ph_up_dose')) document.getElementById('set_ph_up_dose').value = saved.phUpDose || defaultSettings.phUpDose;
-                if (document.getElementById('set_ph_down_dose')) document.getElementById('set_ph_down_dose').value = saved.phDownDose || defaultSettings.phDownDose;
-                document.getElementById('set_telemetry_interval').value = saved.interval || defaultSettings.interval;
+                if (document.getElementById('set_ph_up_dose')) document.getElementById('set_ph_up_dose').value = (saved.phUpDose !== undefined && saved.phUpDose !== '') ? saved.phUpDose : defaultSettings.phUpDose;
+                if (document.getElementById('set_ph_down_dose')) document.getElementById('set_ph_down_dose').value = (saved.phDownDose !== undefined && saved.phDownDose !== '') ? saved.phDownDose : defaultSettings.phDownDose;
+                if (document.getElementById('set_telemetry_interval')) document.getElementById('set_telemetry_interval').value = saved.interval || defaultSettings.interval;
                 var provider = saved.aiProvider || defaultSettings.aiProvider;
                 if (aiProviderSelect) aiProviderSelect.value = provider;
                 document.getElementById('set_ai_api_key').value = saved.apiKey || defaultSettings.apiKey;
@@ -536,11 +716,13 @@
                 if (document.getElementById('set_mqtt_broker')) document.getElementById('set_mqtt_broker').value = defaultSettings.mqttBroker;
                 if (document.getElementById('set_mqtt_topic_sub')) document.getElementById('set_mqtt_topic_sub').value = defaultSettings.mqttTopicSub;
                 if (document.getElementById('set_mqtt_topic_pub')) document.getElementById('set_mqtt_topic_pub').value = defaultSettings.mqttTopicPub;
-                if (document.getElementById('set_pompa')) document.getElementById('set_pompa').value = defaultSettings.pompa;
+                if (document.getElementById('set_mqtt_topic_status')) document.getElementById('set_mqtt_topic_status').value = defaultSettings.mqttTopicStatus;
+                if (document.getElementById('set_interval_minutes')) document.getElementById('set_interval_minutes').value = defaultSettings.intervalMinutes;
                 if (document.getElementById('set_ec_target')) document.getElementById('set_ec_target').value = defaultSettings.ecTarget;
                 if (document.getElementById('set_ph_up_dose')) document.getElementById('set_ph_up_dose').value = defaultSettings.phUpDose;
                 if (document.getElementById('set_ph_down_dose')) document.getElementById('set_ph_down_dose').value = defaultSettings.phDownDose;
-                document.getElementById('set_telemetry_interval').value = defaultSettings.interval;
+                relayCards.forEach(function (card) { updateRelayUI(card, false); });
+                if (document.getElementById('set_telemetry_interval')) document.getElementById('set_telemetry_interval').value = defaultSettings.interval;
                 if (aiProviderSelect) aiProviderSelect.value = defaultSettings.aiProvider;
                 document.getElementById('set_ai_api_key').value = defaultSettings.apiKey;
                 updateAiKeyPlaceholder(defaultSettings.aiProvider);
@@ -549,7 +731,8 @@
                     window.updateMqttConnectionConfig({
                         brokerUrl: defaultSettings.mqttBroker,
                         topic: defaultSettings.mqttTopicSub,
-                        publishTopic: defaultSettings.mqttTopicPub
+                        publishTopic: defaultSettings.mqttTopicPub,
+                        statusTopic: defaultSettings.mqttTopicStatus
                     });
                 }
             });
@@ -560,7 +743,8 @@
                 var mqttBrokerEl = document.getElementById('set_mqtt_broker');
                 var mqttSubEl = document.getElementById('set_mqtt_topic_sub');
                 var mqttPubEl = document.getElementById('set_mqtt_topic_pub');
-                var pompaEl = document.getElementById('set_pompa');
+                var mqttStatusEl = document.getElementById('set_mqtt_topic_status');
+                var intervalMinEl = document.getElementById('set_interval_minutes');
                 var ecTargetEl = document.getElementById('set_ec_target');
                 var phUpEl = document.getElementById('set_ph_up_dose');
                 var phDownEl = document.getElementById('set_ph_down_dose');
@@ -577,35 +761,38 @@
                     mqttBroker: (mqttBrokerEl && mqttBrokerEl.value.trim()) || defaultSettings.mqttBroker,
                     mqttTopicSub: (mqttSubEl && mqttSubEl.value.trim()) || defaultSettings.mqttTopicSub,
                     mqttTopicPub: (mqttPubEl && mqttPubEl.value.trim()) || defaultSettings.mqttTopicPub,
-                    pompa: pompaEl ? pompaEl.value : 'off',
+                    mqttTopicStatus: (mqttStatusEl && mqttStatusEl.value.trim()) || defaultSettings.mqttTopicStatus,
+                    intervalMinutes: (intervalMinEl && intervalMinEl.value.trim()) || defaultSettings.intervalMinutes,
                     ecTarget: ecTargetEl ? ecTargetEl.value.trim() : defaultSettings.ecTarget,
                     phUpDose: phUpEl ? phUpEl.value.trim() : defaultSettings.phUpDose,
                     phDownDose: phDownEl ? phDownEl.value.trim() : defaultSettings.phDownDose,
-                    interval: document.getElementById('set_telemetry_interval').value,
+                    interval: document.getElementById('set_telemetry_interval') ? document.getElementById('set_telemetry_interval').value : defaultSettings.interval,
                     aiProvider: aiProviderSelect ? aiProviderSelect.value : defaultSettings.aiProvider,
                     apiKey: document.getElementById('set_ai_api_key').value.trim()
                 };
+                PUMP_KEYS.forEach(function (key) {
+                    newSettings[key] = defaultSettings[key];
+                });
+                relayCards.forEach(function (card) {
+                    var pumpKey = card.dataset.pump;
+                    if (pumpKey && PUMP_KEYS.indexOf(pumpKey) !== -1) {
+                        newSettings[pumpKey] = card.classList.contains('active') ? 'on' : 'off';
+                    }
+                });
+
                 localStorage.setItem('tefa_dashboard_settings', JSON.stringify(newSettings));
 
                 if (typeof window.updateMqttConnectionConfig === 'function') {
                     window.updateMqttConnectionConfig({
                         brokerUrl: newSettings.mqttBroker,
                         topic: newSettings.mqttTopicSub,
-                        publishTopic: newSettings.mqttTopicPub
+                        publishTopic: newSettings.mqttTopicPub,
+                        statusTopic: newSettings.mqttTopicStatus
                     });
                 }
 
-                // Publish setting ke MQTT dalam format JSON tefa/hidroponik/aktuator
-                var publishPayload = {
-                    pompa: newSettings.pompa,
-                    threshold: {
-                        ph_min: parseFloat(newSettings.phMin.replace(',', '.')) || 5.5,
-                        ph_max: parseFloat(newSettings.phMax.replace(',', '.')) || 6.5,
-                        ec_target: parseFloat(newSettings.ecTarget.replace(',', '.')) || 1.8,
-                        ph_up_dose_sec: parseFloat(newSettings.phUpDose) || 0,
-                        ph_down_dose_sec: parseFloat(newSettings.phDownDose) || 0
-                    }
-                };
+                // Publish setting ke MQTT dalam format JSON tefa/hidroponik/control
+                var publishPayload = buildControlPayload(newSettings);
                 var publishResult = 'offline';
                 if (typeof window.publishMqttSettings === 'function') {
                     publishResult = window.publishMqttSettings(publishPayload);
@@ -665,9 +852,9 @@
         if (!aiBtn || !aiPopup) return;
 
         var DEFAULT_ORB_HINT = 'Generate expressive prompts by speaking naturally. Ketuk orb untuk mulai bertanya dengan suara.';
-        var MIN_ORB_SIZE = 160;
+        var MIN_ORB_SIZE = 120;
         var MAX_ORB_SIZE = 560;
-        var currentOrbSize = window.innerWidth <= 680 ? 290 : 380;
+        var currentOrbSize = window.innerWidth <= 680 ? 180 : 380;
         var suppressOrbClick = false;
         var ttsEnabled = true;
         var isListening = false;
@@ -997,7 +1184,10 @@
         }
 
         function setOrbSize(nextSize) {
-            var maxFit = Math.min(MAX_ORB_SIZE, window.innerWidth - 40, window.innerHeight - 110);
+            var isMobile = window.innerWidth <= 680;
+            var maxFit = isMobile
+                ? Math.min(240, window.innerWidth - 56, window.innerHeight - 130)
+                : Math.min(MAX_ORB_SIZE, window.innerWidth - 40, window.innerHeight - 110);
             var upper = Math.max(MIN_ORB_SIZE, maxFit);
             currentOrbSize = Math.round(Math.min(upper, Math.max(MIN_ORB_SIZE, nextSize)));
             if (orbCanvas) {
@@ -1067,6 +1257,9 @@
             aiBtn.classList.add('hidden');
             voicePanel.classList.add('open');
             voicePanel.setAttribute('aria-hidden', 'false');
+            if (window.innerWidth <= 680 && currentOrbSize > 200) {
+                currentOrbSize = 180;
+            }
             setOrbSize(currentOrbSize);
             if (aiBtnVoiceOrb) aiBtnVoiceOrb.classList.add('voice-active');
             startOrbAnimation();
@@ -2463,8 +2656,8 @@
                         window.syncActiveSection(secId, true);
                     }
 
-                    var topRow = document.querySelector('.top-row');
-                    var navHeight = topRow ? topRow.offsetHeight + 16 : 76;
+                    var navBar = document.querySelector('.top-row .nav');
+                    var navHeight = (navBar ? navBar.offsetHeight : 54) + 20;
                     var elementPosition = targetEl.getBoundingClientRect().top;
                     var offsetPosition = elementPosition + window.pageYOffset - navHeight;
 

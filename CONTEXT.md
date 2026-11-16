@@ -12,7 +12,7 @@ Dokumen ini berisi konteks lengkap arsitektur sistem, alur akses halaman web, sp
 - **Arsitektur Web:**
   - Client-side Front-End murni (HTML5, Vanilla CSS3, Vanilla JavaScript ES6+).
   - Ringan, cepat, responsif di desktop & mobile tanpa framework berat.
-  - Data telemetri dikirim/diterima melalui protokol **MQTT** dalam format **JSON** dari mikrokontroler (ESP32) melalui broker MQTT dengan topik **`tefa/smkn2yogyakarta/data`**.
+  - Data telemetri, kontrol aktuator, dan status perangkat dikirim/diterima melalui protokol **MQTT** (WebSocket `wss://broker.emqx.io:8084/mqtt`) dalam format **JSON** dari mikrokontroler (ESP32) menggunakan topik **`tefa/hidroponik/sensor`**, **`tefa/hidroponik/control`**, dan **`tefa/hidroponik/status`** (mengacu pada [`jsonDantopic.md`](jsonDantopic.md)).
 
 ---
 
@@ -46,13 +46,15 @@ D:\Isro\TeFa\
 ├── indexAdmin.html       # Dashboard Administrator (Telemetri + Kontrol Aktuator Relay 8-Channel)
 ├── login.html            # Halaman autentikasi khusus Admin (Tidak ada login viewer)
 ├── CONTEXT.md            # Dokumentasi konteks proyek & spesifikasi format JSON
+├── jsonDantopic.md       # Spesifikasi topik MQTT & skema payload JSON terbaru
 ├── README.md             # Catatan repositori proyek
 ├── css/
 │   ├── viewer.css        # Styling layout, animasi, dan komponen untuk Dashboard Viewer
 │   └── admin.css         # Styling Viewer ditambah komponen Panel Kontrol Relay untuk Admin
 └── js/
     ├── viewer.js         # Logika front-end Viewer (jam WIB, chart, tabel paginasi, AI modal, notif)
-    └── admin.js          # Logika front-end Admin (semua fitur viewer + logika relay toggle & timer)
+    ├── admin.js          # Logika front-end Admin (semua fitur viewer + kontrol pompa/relay & setting MQTT)
+    └── mqtt-client.js    # Klien MQTT WebSocket (subscribe sensor/status, publish control, grafik & tabel)
 ```
 
 ---
@@ -88,83 +90,88 @@ Mikrokontroler utama: **ESP32**
 | 6 | **Relay 8 Channel** | Relay Module 5V | GPIO 13 – 27 | Beban: 10A 250VAC | Mengendalikan aktuator listrik (Hanya Admin) |
 | 7 | **AWS (Weather Station)** | Multi-sensor Station | Serial / Modbus / I2C | Beragam (W/m², km/h, %, pH) | Cuaca luar & kondisi tanah |
 
-### Pemetaan 8 Saluran Relay (Khusus Admin di `indexAdmin.html`):
-- **Relay 1:** `Nutrient Pump` (Pompa Sirkulasi Nutrisi)
-- **Relay 2:** `Aerator` (Penambah Oksigen Larutan)
-- **Relay 3:** `Grow Light` (Lampu Pembantu Fotosintesis)
-- **Relay 4:** `pH Up Pump` (Injeksi Cairan Basa/Alkali)
-- **Relay 5:** `pH Down Pump` (Injeksi Cairan Asam)
-- **Relay 6:** `Exhaust Fan` (Kipas Pembuangan Udara Panas)
-- **Relay 7:** `Misting` (Pengabutan/Pendingin Suhu)
-- **Relay 8:** `Reserve` (Saluran Cadangan/Tambahan)
+### Pemetaan Saluran Pompa & Relay (Khusus Admin di `indexAdmin.html`):
+Saluran Relay 1–5 terhubung langsung ke kontrol pompa MQTT (`pumps` pada topik `tefa/hidroponik/control` & `pumps_status` pada topik `tefa/hidroponik/status`):
+- **Relay 1 (`pump_A`):** `Nutrient Pump A` (Pompa Nutrisi A)
+- **Relay 2 (`pump_B`):** `Nutrient Pump B` (Pompa Nutrisi B)
+- **Relay 3 (`pump_up`):** `pH Up Pump` (Injeksi Cairan Basa/Alkali)
+- **Relay 4 (`pump_down`):** `pH Down Pump` (Injeksi Cairan Asam)
+- **Relay 5 (`pump_big`):** `Main Pump (Big)` (Pompa Sirkulasi Utama)
+- **Relay 6:** `Exhaust Fan` (Saluran Tambahan / UI Lokal)
+- **Relay 7:** `Misting` (Saluran Tambahan / UI Lokal)
+- **Relay 8:** `Reserve` (Saluran Cadangan / UI Lokal)
 
 ---
 
 ## 4. Protokol MQTT & Standar Format Data JSON Sensor
 
-Sistem menggunakan protokol **MQTT** dengan payload berformat **JSON** untuk komunikasi antara Mikrokontroler (ESP32), MQTT Broker, dan Dashboard Web.
+Sistem menggunakan protokol **MQTT** (broker default: `wss://broker.emqx.io:8084/mqtt`) dengan payload berformat **JSON** untuk komunikasi antara Mikrokontroler (ESP32), MQTT Broker, dan Dashboard Web sesuai [`jsonDantopic.md`](jsonDantopic.md):
 
-- **Topik MQTT Telemetri Sensor:** `tefa/smkn2yogyakarta/data`
+- **Topik MQTT Subscribe Sensor:** `tefa/hidroponik/sensor`
+- **Topik MQTT Publish Control:** `tefa/hidroponik/control`
+- **Topik MQTT Subscribe Status:** `tefa/hidroponik/status`
 
-### A. Payload Telemetri Live (MQTT Topic: `tefa/smkn2yogyakarta/data`)
-Format JSON aktual yang dipublish oleh firmware (`device_id`: `firmware_dayone`) ke topik `tefa/smkn2yogyakarta/data` menggunakan struktur array `sensors`:
+### A. Payload Telemetri Live (MQTT Topic: `tefa/hidroponik/sensor`)
+Format JSON aktual yang dipublish oleh perangkat (`device_id`: `DEV-TSK-01`) ke topik `tefa/hidroponik/sensor`:
 
 ```json
 {
-  "device_id": "firmware_dayone",
+  "device_id": "DEV-TSK-01",
   "timestamp": "2026-11-09T04:15:30Z",
   "sensors": [
     {
-      "id": "kekuatan_wiFi",
-      "value": 10.0,
-      "satuan": "Mbps"
-    },
-    {
-      "id": "001pH",
+      "id": "SNS-PH-001",
+      "name": "pH Larutan Nutrisi",
       "value": 7.20,
       "satuan": "pH"
     },
     {
-      "id": "002EC",
+      "id": "SNS-EC-002",
+      "name": "Konduktivitas Listrik (EC)",
       "value": 1.45,
       "satuan": "mS/cm"
     },
     {
-      "id": "003bh1750",
+      "id": "SNS-BH-003",
+      "name": "Intensitas Cahaya Lingkungan",
       "value": 450.50,
-      "satuan": "lux"
+      "satuan": "Lux"
     },
     {
-      "id": "004aht20_temp",
-      "value": 28.50,
-      "satuan": "°C"
+      "id": "SNS-AHT-004",
+      "name": "Suhu & Kelembapan Udara",
+      "temperature": 28.50,
+      "humidity": 65.20,
+      "satuan_temp": "°C",
+      "satuan_hum": "% RH"
     },
     {
-      "id": "004aht20_hum",
-      "value": 65.20,
-      "satuan": "%"
-    },
-    {
-      "id": "005sensorair",
+      "id": "SNS-WT-005",
+      "name": "Suhu Air Tangki Nutrisi",
       "value": 26.80,
       "satuan": "°C"
+    },
+    {
+      "id": "TEL-WIFI-001",
+      "name": "Kekuatan Sinyal WiFi (RSSI)",
+      "value": -65,
+      "satuan": "dBm"
     }
   ]
 }
 ```
 
 #### Pemetaan `sensors[].id` ke UI Dashboard:
-| `id` Sensor | Tipe / Keterangan | `satuan` | Target Tampilan UI Dashboard |
+| `id` Sensor | Tipe / Keterangan | Field & Satuan | Target Tampilan UI Dashboard |
 |---|---|---|---|
-| `kekuatan_wiFi` | Kekuatan / Kecepatan WiFi ESP32 | `Mbps` | Indikator koneksi / status perangkat |
-| `001pH` | Sensor pH Air (PH-4502C) | `pH` | Kartu Sensor pH, Threshold Monitor, Grafik & Tabel `#hist` |
-| `002EC` | Electrical Conductivity / Nutrisi | `mS/cm` | Kartu Nutrition / TDS (dapat ditampilkan sebagai EC atau dikonversi ke ppm) |
-| `003bh1750` | Sensor Intensitas Cahaya (BH1750) | `lux` | Kartu Light, Threshold Monitor & Tabel `#hist` |
-| `004aht20_temp` | Sensor Suhu Udara (AHT20) | `°C` | Kartu Weather & Time (Air Temp) & Grafik |
-| `004aht20_hum` | Sensor Kelembaban Udara (AHT20) | `%` | Kartu Weather Humidity, Threshold Monitor & Tabel `#hist` |
-| `005sensorair` | Sensor Suhu Air Tandon | `°C` | Donut Chart Water Temp, Threshold Monitor, Grafik & Tabel `#hist` |
+| `TEL-WIFI-001` | Kekuatan Sinyal WiFi (RSSI) | `value` (`dBm`) | Indikator koneksi / status perangkat ESP32 |
+| `SNS-PH-001` | pH Larutan Nutrisi | `value` (`pH`) | Kartu Sensor pH, Threshold Monitor, Grafik & Tabel `#hist` |
+| `SNS-EC-002` | Konduktivitas Listrik (EC) | `value` (`mS/cm`) | Kartu Nutrition / TDS, Threshold Monitor, Grafik & Tabel `#hist` |
+| `SNS-BH-003` | Intensitas Cahaya Lingkungan | `value` (`Lux`) | Kartu Light, Threshold Monitor, AWS Lux & Tabel `#hist` |
+| `SNS-AHT-004` | Suhu & Kelembapan Udara (AHT20) | `temperature` (`°C`), `humidity` (`% RH`) | Kartu Weather & Time, Threshold Monitor, AWS Air & Tabel `#hist` |
+| `SNS-WT-005` | Suhu Air Tangki Nutrisi | `value` (`°C`) | Donut Chart Water Temp, Threshold Monitor, Grafik & Tabel `#hist` |
 
-*Catatan:* `timestamp` dikirim dalam format ISO 8601 UTC (`Z`), sehingga pada UI dashboard perlu dikonversi ke waktu lokal **WIB (UTC+7)**.
+*Catatan:* `timestamp` dikirim dalam format ISO 8601 UTC (`Z`), sehingga pada UI dashboard dikonversi ke waktu lokal **WIB (UTC+7)**. Klien web juga tetap mempertahankan fallback kompatibilitas untuk ID legacy (`001pH`, `002EC`, dll.).
 
 ---
 
@@ -246,44 +253,85 @@ Digunakan pada tabel AWS Tabs (Daily, Weekly, Monthly):
 ---
 
 ### D. Publish Pengaturan & Kontrol Pompa (Web Admin $\rightarrow$ MQTT Broker $\rightarrow$ ESP32)
-Dikirim saat Admin menekan tombol **SAVE** pada modal Setting (`indexAdmin.html`) ke topik `tefa/smkn2yogyakarta/control`:
+Dikirim saat Admin menekan tombol **SAVE** pada modal Setting atau mengubah toggle pompa (`Relay 1–5`) di `indexAdmin.html` ke topik `tefa/hidroponik/control`:
 
 ```json
 {
-  "pompa": "on",
+  "interval_minutes": 1,
+  "pumps": {
+    "pump_A": "off",
+    "pump_B": "off",
+    "pump_up": "off",
+    "pump_down": "off",
+    "pump_big": "on"
+  },
   "threshold": {
-    "ph_min": 6.0,
-    "ph_max": 7.5,
+    "ph_min": 5.5,
+    "ph_max": 6.5,
     "ec_target": 1.5,
-    "ph_up_dose": 5,
-    "ph_down_dose": 5
+    "ph_up_dose_sec": 2,
+    "ph_down_dose_sec": 2
   }
 }
 ```
 
 ---
 
-### E. Format Konfigurasi & Ambang Batas (`localStorage: tefa_dashboard_settings`)
+### E. Subscribe Status Perangkat & Pompa (ESP32 $\rightarrow$ MQTT Broker $\rightarrow$ Web)
+Diterima dari topik `tefa/hidroponik/status` untuk menyinkronkan status pompa dan interval aktif pada Hardware Health serta Relay Card di Admin:
+
+```json
+{
+  "device_id": "DEV-TSK-01",
+  "status_message": "Command executed successfully",
+  "active_interval_minutes": 1,
+  "pumps_status": {
+    "pump_A": "OFF",
+    "pump_B": "OFF",
+    "pump_up": "OFF",
+    "pump_down": "OFF",
+    "pump_big": "ON"
+  }
+}
+```
+
+---
+
+### F. Format Konfigurasi & Ambang Batas (`localStorage: tefa_dashboard_settings`)
 Tersimpan di peramban pengguna melalui modal Settings (Ikon Gear):
 
 ```json
 {
-  "phMin": "5,5",
-  "phMax": "6,5",
+  "phMin": "5.5",
+  "phMax": "6.5",
   "tdsMin": "600",
   "tdsMax": "1200",
   "tempMin": "20",
   "tempMax": "30",
   "humMin": "50",
   "humMax": "85",
+  "mqttBroker": "wss://broker.emqx.io:8084/mqtt",
+  "mqttTopicSub": "tefa/hidroponik/sensor",
+  "mqttTopicPub": "tefa/hidroponik/control",
+  "mqttTopicStatus": "tefa/hidroponik/status",
+  "intervalMinutes": "1",
+  "pump_A": "off",
+  "pump_B": "off",
+  "pump_up": "off",
+  "pump_down": "off",
+  "pump_big": "on",
+  "ecTarget": "1.5",
+  "phUpDose": "2",
+  "phDownDose": "2",
   "interval": "3",
+  "aiProvider": "gemini",
   "apiKey": ""
 }
 ```
 
 ---
 
-### F. Format Notifikasi / Alarm Sensor (`notifications`)
+### G. Format Notifikasi / Alarm Sensor (`notifications`)
 Data pada popup lonceng notifikasi bila ada sensor yang melewati nilai ambang batas:
 
 ```json
