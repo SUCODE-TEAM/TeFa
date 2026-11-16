@@ -40,39 +40,50 @@ Dokumen ini berisi konteks lengkap arsitektur sistem, alur akses halaman web, sp
 ### B. Struktur File Proyek
 
 ```
-D:\Isro\TeFa\
+TEFA-combine/
 ├── index.html            # Gateway/Entry point, otomatis redirect ke indexViewer.html (Mode Publik)
 ├── indexViewer.html      # Dashboard utama publik (Read-only telemetri & AWS, tanpa kontrol relay)
 ├── indexAdmin.html       # Dashboard Administrator (Telemetri + Kontrol Aktuator Relay 8-Channel)
-├── login.html            # Halaman autentikasi khusus Admin (Tidak ada login viewer)
+├── login.html            # Halaman autentikasi khusus Admin (Figma-accurate, single-page static)
 ├── CONTEXT.md            # Dokumentasi konteks proyek & spesifikasi format JSON
 ├── jsonDantopic.md       # Spesifikasi topik MQTT & skema payload JSON terbaru
 ├── README.md             # Catatan repositori proyek
 ├── css/
 │   ├── viewer.css        # Styling layout, animasi, dan komponen untuk Dashboard Viewer
 │   └── admin.css         # Styling Viewer ditambah komponen Panel Kontrol Relay untuk Admin
-└── js/
-    ├── viewer.js         # Logika front-end Viewer (jam WIB, chart, tabel paginasi, AI modal, notif)
-    ├── admin.js          # Logika front-end Admin (semua fitur viewer + kontrol pompa/relay & setting MQTT)
-    └── mqtt-client.js    # Klien MQTT WebSocket (subscribe sensor/status, publish control, grafik & tabel)
+├── js/
+│   ├── viewer.js         # Logika front-end Viewer (jam WIB, chart, tabel paginasi, AI modal, notif)
+│   ├── admin.js          # Logika front-end Admin (semua fitur viewer + kontrol pompa/relay & setting MQTT)
+│   └── mqtt-client.js    # Klien MQTT WebSocket (subscribe sensor/status, publish control, grafik & tabel)
+└── docs/
+    ├── design_TEFA.md    # Spesifikasi Design System (@anti-slop-design, token, komponen)
+    ├── prd_smart_hydroponic_system_mappi32_node_red.md # Dokumen PRD teknis sistem
+    └── [file blueprint, PDF mockup, dan aset grafis]
 ```
 
 ---
 
 ### C. Kredensial Autentikasi Admin (`login.html`)
 Form login **hanya digunakan oleh Administrator**:
+- **Desain Halaman:** Mengadopsi desain presisi 1:1 vektor Figma (`Login Form.svg`), *single-page static* tanpa scrollbar di seluruh resolusi (Desktop, Laptop 768p, Tablet, Mobile), dilengkapi ornamen tunas krayon, 3 doodle loop daun zaitun, dan latar belakang gelombang spiral konsentris botani.
 - **Role:** `admin`
 - **Username yang diterima:** `admin`, `admin@tefa.id`, atau `tefa`
 - **Password:** `admin123` atau `mappi32`
-- **Penyimpanan Sesi:** `sessionStorage.getItem('tefa_auth_user')` berisi objek:
-  ```json
-  {
-    "username": "admin",
-    "role": "admin",
-    "loginTime": "2026-11-13T08:45:00.000Z"
-  }
-  ```
-- *Catatan:* Opsi login viewer telah ditiadakan karena pengunjung langsung mengakses `indexViewer.html`.
+- **Penyimpanan Sesi:**
+  - `sessionStorage.getItem('tefa_auth_user')` berisi objek:
+    ```json
+    {
+      "username": "admin",
+      "role": "admin",
+      "loginTime": "2026-11-13T08:45:00.000Z"
+    }
+    ```
+  - `localStorage.getItem('tefa_remember_user')` menyimpan username jika checkbox *"Ingat Saya"* dicentang.
+- **Interaksi & Navigasi:**
+  - Terdapat chip autofill demo (`admin / admin123`) di bagian bawah untuk kemudahan pengujian.
+  - Tautan *"Masuk sebagai Pengunjung (Viewer) →"* untuk kembali langsung ke `indexViewer.html`.
+  - Berhasil login otomatis mengarahkan ke `indexAdmin.html`. Validasi gagal memunculkan *toast notification* merah.
+- *Catatan:* Opsi login viewer ditiadakan karena pengunjung publik langsung diarahkan ke `indexViewer.html`.
 
 ---
 
@@ -97,9 +108,9 @@ Saluran Relay 1–5 terhubung langsung ke kontrol pompa MQTT (`pumps` pada topik
 - **Relay 3 (`pump_up`):** `pH Up Pump` (Injeksi Cairan Basa/Alkali)
 - **Relay 4 (`pump_down`):** `pH Down Pump` (Injeksi Cairan Asam)
 - **Relay 5 (`pump_big`):** `Main Pump (Big)` (Pompa Sirkulasi Utama)
-- **Relay 6:** `Exhaust Fan` (Saluran Tambahan / UI Lokal)
-- **Relay 7:** `Misting` (Saluran Tambahan / UI Lokal)
-- **Relay 8:** `Reserve` (Saluran Cadangan / UI Lokal)
+- **Relay 6:** `Coming Soon` (Saluran Ekspansi Hardware / Exhaust Fan)
+- **Relay 7:** `Coming Soon` (Saluran Ekspansi Hardware / Misting)
+- **Relay 8:** `Coming Soon` (Saluran Ekspansi Hardware / Reserve)
 
 ---
 
