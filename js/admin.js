@@ -2081,16 +2081,25 @@
     }
 
     // ============================================================
-    // SHARED PAGINATION BUTTON BUILDER (Max 5 pages + ellipsis)
+    // SHARED PAGINATION BUTTON BUILDER (Responsive pages + ellipsis)
     // ============================================================
+    function getPaginationMaxVisible() {
+        return window.innerWidth <= 380 ? 1 : (window.innerWidth <= 600 ? 3 : 5);
+    }
+
     function renderTablePaginationButtons(btnsContainer, currentPage, totalPages, onPageSelect) {
         if (!btnsContainer) return;
+        btnsContainer._paginationState = {
+            currentPage: currentPage,
+            totalPages: totalPages,
+            onPageSelect: onPageSelect
+        };
         btnsContainer.innerHTML = '';
 
-        function createPageBtn(page) {
+        function createPageBtn(page, extraClass) {
             var btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'table-pagination-btn' + (page === currentPage ? ' active' : '');
+            btn.className = 'table-pagination-btn' + (page === currentPage ? ' active' : '') + (extraClass || '');
             btn.textContent = page;
             btn.addEventListener('click', function () {
                 onPageSelect(page);
@@ -2116,8 +2125,9 @@
         });
         btnsContainer.appendChild(prevBtn);
 
-        var maxVisible = 5;
-        var startPage = Math.max(1, currentPage - 2);
+        var maxVisible = getPaginationMaxVisible();
+        var half = Math.floor(maxVisible / 2);
+        var startPage = Math.max(1, currentPage - half);
         var endPage = Math.min(totalPages, startPage + maxVisible - 1);
         if (endPage - startPage < maxVisible - 1) {
             startPage = Math.max(1, endPage - maxVisible + 1);
@@ -2129,7 +2139,8 @@
         }
 
         for (var p = startPage; p <= endPage; p++) {
-            btnsContainer.appendChild(createPageBtn(p));
+            var isFar = Math.abs(p - currentPage) > 1 && p !== 1 && p !== totalPages;
+            btnsContainer.appendChild(createPageBtn(p, isFar ? ' page-btn-far' : ''));
         }
 
         if (endPage < totalPages) {
@@ -2147,6 +2158,23 @@
             if (currentPage < totalPages) onPageSelect(currentPage + 1);
         });
         btnsContainer.appendChild(nextBtn);
+
+        if (!window._tefaPaginationResizeBound) {
+            window._tefaPaginationResizeBound = true;
+            window._tefaPaginationMaxVisible = maxVisible;
+            window.addEventListener('resize', function () {
+                var nextMax = getPaginationMaxVisible();
+                if (nextMax === window._tefaPaginationMaxVisible) return;
+                window._tefaPaginationMaxVisible = nextMax;
+                ['sensorPaginationBtns', 'awsPaginationBtns'].forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (el && el._paginationState && el.childNodes.length > 0) {
+                        var st = el._paginationState;
+                        renderTablePaginationButtons(el, st.currentPage, st.totalPages, st.onPageSelect);
+                    }
+                });
+            });
+        }
     }
 
     // ============================================================
