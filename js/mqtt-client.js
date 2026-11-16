@@ -95,6 +95,8 @@
     var STORAGE_KEY_LOG = 'tefa_telemetry_log_v1';
     var minWaterTemp = null;
     var maxWaterTemp = null;
+    var minAirTemp = null;
+    var maxAirTemp = null;
     var lastDeviceStatus = null;
     var telemetryHistory = []; // live short buffer for AWS bars
     var telemetryLog = loadTelemetryLog();
@@ -862,22 +864,30 @@
             }
         }
 
-        // 2. Update Weather & Time Card
+        // 2. Update Air Temp & Time Card
         var weatherTempEl = document.querySelector('.card.weather .temp');
         var weatherDescEl = document.querySelector('.card.weather .desc');
-        var wstatsHumEl = document.querySelector('.card.weather .wstats > div:first-child > div');
+        var wstatsItems = document.querySelectorAll('.card.weather .wstats > div > div');
 
-        if (airTemp && weatherTempEl) {
-            weatherTempEl.textContent = airTemp.value.toFixed(1) + '°C';
-            weatherTempEl.style.fontSize = '';
-            weatherTempEl.style.color = 'var(--ink)';
+        if (airTemp) {
+            if (minAirTemp === null || airTemp.value < minAirTemp) minAirTemp = airTemp.value;
+            if (maxAirTemp === null || airTemp.value > maxAirTemp) maxAirTemp = airTemp.value;
+            if (weatherTempEl) {
+                weatherTempEl.textContent = airTemp.value.toFixed(1) + '°C';
+                weatherTempEl.style.fontSize = '';
+                weatherTempEl.style.color = 'var(--ink)';
+            }
+            if (wstatsItems.length >= 3) {
+                wstatsItems[1].innerHTML = '<small>Min Temp</small>' + minAirTemp.toFixed(1) + '°C';
+                wstatsItems[2].innerHTML = '<small>Max Temp</small>' + maxAirTemp.toFixed(1) + '°C';
+            }
         }
         if (weatherDescEl) {
             weatherDescEl.textContent = 'Terhubung · ' + (payload.device_id || 'ESP32');
             weatherDescEl.style.color = '#1B4332';
         }
-        if (airHum && wstatsHumEl) {
-            wstatsHumEl.innerHTML = '<small>Humidity</small>' + airHum.value.toFixed(1) + '%';
+        if (airHum && wstatsItems.length >= 1) {
+            wstatsItems[0].innerHTML = '<small>Humidity</small>' + airHum.value.toFixed(1) + '%';
         }
 
         // 3. Update 3 Sensor Cards (pH, Nutrition/EC, Light)

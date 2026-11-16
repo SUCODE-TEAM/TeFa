@@ -925,7 +925,7 @@
                 return 'Kondisi lingkungan greenhouse: suhu udara ' + t.weatherTemp + ' dengan status ' + t.weatherDesc + ', dan suhu air ' + t.waterTemp + '.';
             }
             if (lower.includes('status') || lower.includes('sensor') || lower.includes('cek') || lower.includes('diagnosa')) {
-                return 'Ringkasan telemetri: ' + t.sensorsSummary + '. Suhu air ' + t.waterTemp + ', status cuaca ' + t.weatherDesc + '. Data otomatis diperbarui bila ESP32 tersambung.';
+                return 'Ringkasan telemetri: ' + t.sensorsSummary + '. Suhu air ' + t.waterTemp + ', suhu udara ' + t.weatherTemp + ' (' + t.weatherDesc + '). Data otomatis diperbarui bila ESP32 tersambung.';
             }
             if (lower.includes('hai') || lower.includes('halo') || lower.includes('selamat')) {
                 return 'Halo! Saya Asisten AI Greenhouse Anda. Silakan tanya lewat suara atau ketik mengenai pH, nutrisi, suhu air, dan cuaca.';
@@ -1685,32 +1685,32 @@
         });
     }
 
-            // ============================================================
-            // SHARED PAGINATION BUTTON BUILDER (Responsive pages + ellipsis)
-            // ============================================================
-            function getPaginationMaxVisible() {
-                return window.innerWidth <= 380 ? 1 : (window.innerWidth <= 600 ? 3 : 5);
-            }
+    // ============================================================
+    // SHARED PAGINATION BUTTON BUILDER (Responsive pages + ellipsis)
+    // ============================================================
+    function getPaginationMaxVisible() {
+        return window.innerWidth <= 380 ? 1 : (window.innerWidth <= 600 ? 3 : 5);
+    }
 
-            function renderTablePaginationButtons(btnsContainer, currentPage, totalPages, onPageSelect) {
-                if (!btnsContainer) return;
-                btnsContainer._paginationState = {
-                    currentPage: currentPage,
-                    totalPages: totalPages,
-                    onPageSelect: onPageSelect
-                };
-                btnsContainer.innerHTML = '';
+    function renderTablePaginationButtons(btnsContainer, currentPage, totalPages, onPageSelect) {
+        if (!btnsContainer) return;
+        btnsContainer._paginationState = {
+            currentPage: currentPage,
+            totalPages: totalPages,
+            onPageSelect: onPageSelect
+        };
+        btnsContainer.innerHTML = '';
 
-                function createPageBtn(page, extraClass) {
-                    var btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'table-pagination-btn' + (page === currentPage ? ' active' : '') + (extraClass || '');
-                    btn.textContent = page;
-                    btn.addEventListener('click', function() {
-                        onPageSelect(page);
-                    });
-                    return btn;
-                }
+        function createPageBtn(page, extraClass) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'table-pagination-btn' + (page === currentPage ? ' active' : '') + (extraClass || '');
+            btn.textContent = page;
+            btn.addEventListener('click', function () {
+                onPageSelect(page);
+            });
+            return btn;
+        }
 
         function createEllipsis() {
             var ell = document.createElement('span');
@@ -1730,57 +1730,57 @@
         });
         btnsContainer.appendChild(prevBtn);
 
-                var maxVisible = getPaginationMaxVisible();
-                var half = Math.floor(maxVisible / 2);
-                var startPage = Math.max(1, currentPage - half);
-                var endPage = Math.min(totalPages, startPage + maxVisible - 1);
-                if (endPage - startPage < maxVisible - 1) {
-                    startPage = Math.max(1, endPage - maxVisible + 1);
-                }
+        var maxVisible = getPaginationMaxVisible();
+        var half = Math.floor(maxVisible / 2);
+        var startPage = Math.max(1, currentPage - half);
+        var endPage = Math.min(totalPages, startPage + maxVisible - 1);
+        if (endPage - startPage < maxVisible - 1) {
+            startPage = Math.max(1, endPage - maxVisible + 1);
+        }
 
         if (startPage > 1) {
             btnsContainer.appendChild(createPageBtn(1));
             if (startPage > 2) btnsContainer.appendChild(createEllipsis());
         }
 
-                for (var p = startPage; p <= endPage; p++) {
-                    var isFar = Math.abs(p - currentPage) > 1 && p !== 1 && p !== totalPages;
-                    btnsContainer.appendChild(createPageBtn(p, isFar ? ' page-btn-far' : ''));
-                }
+        for (var p = startPage; p <= endPage; p++) {
+            var isFar = Math.abs(p - currentPage) > 1 && p !== 1 && p !== totalPages;
+            btnsContainer.appendChild(createPageBtn(p, isFar ? ' page-btn-far' : ''));
+        }
 
         if (endPage < totalPages) {
             if (endPage < totalPages - 1) btnsContainer.appendChild(createEllipsis());
             btnsContainer.appendChild(createPageBtn(totalPages));
         }
 
-                var nextBtn = document.createElement('button');
-                nextBtn.type = 'button';
-                nextBtn.className = 'table-pagination-btn';
-                nextBtn.innerHTML = '&rsaquo;';
-                nextBtn.title = 'Halaman Berikutnya';
-                nextBtn.disabled = currentPage >= totalPages || totalPages === 0;
-                nextBtn.addEventListener('click', function() {
-                    if (currentPage < totalPages) onPageSelect(currentPage + 1);
-                });
-                btnsContainer.appendChild(nextBtn);
+        var nextBtn = document.createElement('button');
+        nextBtn.type = 'button';
+        nextBtn.className = 'table-pagination-btn';
+        nextBtn.innerHTML = '&rsaquo;';
+        nextBtn.title = 'Halaman Berikutnya';
+        nextBtn.disabled = currentPage >= totalPages || totalPages === 0;
+        nextBtn.addEventListener('click', function () {
+            if (currentPage < totalPages) onPageSelect(currentPage + 1);
+        });
+        btnsContainer.appendChild(nextBtn);
 
-                if (!window._tefaPaginationResizeBound) {
-                    window._tefaPaginationResizeBound = true;
-                    window._tefaPaginationMaxVisible = maxVisible;
-                    window.addEventListener('resize', function() {
-                        var nextMax = getPaginationMaxVisible();
-                        if (nextMax === window._tefaPaginationMaxVisible) return;
-                        window._tefaPaginationMaxVisible = nextMax;
-                        ['sensorPaginationBtns', 'awsPaginationBtns'].forEach(function(id) {
-                            var el = document.getElementById(id);
-                            if (el && el._paginationState && el.childNodes.length > 0) {
-                                var st = el._paginationState;
-                                renderTablePaginationButtons(el, st.currentPage, st.totalPages, st.onPageSelect);
-                            }
-                        });
-                    });
-                }
-            }
+        if (!window._tefaPaginationResizeBound) {
+            window._tefaPaginationResizeBound = true;
+            window._tefaPaginationMaxVisible = maxVisible;
+            window.addEventListener('resize', function () {
+                var nextMax = getPaginationMaxVisible();
+                if (nextMax === window._tefaPaginationMaxVisible) return;
+                window._tefaPaginationMaxVisible = nextMax;
+                ['sensorPaginationBtns', 'awsPaginationBtns'].forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (el && el._paginationState && el.childNodes.length > 0) {
+                        var st = el._paginationState;
+                        renderTablePaginationButtons(el, st.currentPage, st.totalPages, st.onPageSelect);
+                    }
+                });
+            });
+        }
+    }
 
     // ============================================================
     // SENSOR DATA TABLE PAGINATION & DATA ENGINE

@@ -1317,7 +1317,7 @@
                 return 'Kondisi lingkungan greenhouse: suhu udara ' + t.weatherTemp + ' dengan status ' + t.weatherDesc + ', dan suhu air ' + t.waterTemp + '.';
             }
             if (lower.includes('status') || lower.includes('sensor') || lower.includes('cek') || lower.includes('diagnosa')) {
-                return 'Ringkasan telemetri: ' + t.sensorsSummary + '. Suhu air ' + t.waterTemp + ', status cuaca ' + t.weatherDesc + '. Pastikan mikrokontroler aktif bila nilai masih N/A.';
+                return 'Ringkasan telemetri: ' + t.sensorsSummary + '. Suhu air ' + t.waterTemp + ', suhu udara ' + t.weatherTemp + ' (' + t.weatherDesc + '). Pastikan mikrokontroler aktif bila nilai masih N/A.';
             }
             if (lower.includes('relay') || lower.includes('pompa') || lower.includes('lampu') || lower.includes('kipas')) {
                 return 'Panel Relay siap dikendalikan melalui menu Relay atau dashboard admin. Status default berada di Standby agar aman sebelum data live masuk.';
