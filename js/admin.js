@@ -56,6 +56,73 @@
         });
     }
 
+    var PUMP_KEYS = ['pump_A', 'pump_B', 'pump_up', 'pump_down', 'pump_big'];
+
+    var DEFAULT_DASHBOARD_SETTINGS = {
+        phMin: '5.5', phMax: '6.5',
+        tdsMin: '600', tdsMax: '1200',
+        tempMin: '20', tempMax: '30',
+        humMin: '50', humMax: '85',
+        mqttBroker: 'wss://broker.emqx.io:8084/mqtt',
+        mqttTopicSub: 'tefa/hidroponik/sensor',
+        mqttTopicPub: 'tefa/hidroponik/control',
+        mqttTopicStatus: 'tefa/hidroponik/status',
+        intervalMinutes: '1',
+        pump_A: 'off',
+        pump_B: 'off',
+        pump_up: 'off',
+        pump_down: 'off',
+        pump_big: 'off',
+        ecTarget: '1.5',
+        phUpDose: '2',
+        phDownDose: '2',
+        interval: '3',
+        aiProvider: 'gemini',
+        apiKey: ''
+    };
+
+    function getMergedDashboardSettings() {
+        var saved = {};
+        try {
+            saved = JSON.parse(localStorage.getItem('tefa_dashboard_settings') || '{}') || {};
+        } catch (e) {
+            saved = {};
+        }
+        var merged = Object.assign({}, DEFAULT_DASHBOARD_SETTINGS, saved);
+        if (merged.mqttTopicPub === 'tefa/hidroponik/aktuator') {
+            merged.mqttTopicPub = DEFAULT_DASHBOARD_SETTINGS.mqttTopicPub;
+        }
+        return merged;
+    }
+
+    function buildControlPayload(settingsObj) {
+        var s = settingsObj || getMergedDashboardSettings();
+        var ecParsed = parseFloat(String(s.ecTarget !== undefined ? s.ecTarget : '1.5').replace(',', '.'));
+        var phMinParsed = parseFloat(String(s.phMin !== undefined ? s.phMin : '5.5').replace(',', '.'));
+        var phMaxParsed = parseFloat(String(s.phMax !== undefined ? s.phMax : '6.5').replace(',', '.'));
+        var upDoseParsed = parseFloat(s.phUpDose);
+        var downDoseParsed = parseFloat(s.phDownDose);
+        var intervalParsed = parseInt(s.intervalMinutes, 10);
+
+        return {
+            interval_minutes: (!isNaN(intervalParsed) && intervalParsed > 0) ? intervalParsed : 1,
+            pumps: {
+                pump_A: String(s.pump_A || 'off').toLowerCase(),
+                pump_B: String(s.pump_B || 'off').toLowerCase(),
+                pump_up: String(s.pump_up || 'off').toLowerCase(),
+                pump_down: String(s.pump_down || 'off').toLowerCase(),
+                pump_big: String(s.pump_big || 'off').toLowerCase()
+            },
+            threshold: {
+                ph_min: isNaN(phMinParsed) ? 5.5 : phMinParsed,
+                ph_max: isNaN(phMaxParsed) ? 6.5 : phMaxParsed,
+                ec_target: isNaN(ecParsed) ? 1.5 : ecParsed,
+                ph_up_dose_sec: isNaN(upDoseParsed) ? 0 : upDoseParsed,
+                ph_down_dose_sec: isNaN(downDoseParsed) ? 0 : downDoseParsed
+            }
+        };
+    }
+
     // Relay Management Logic (All start OFF / Mati)
     var relayCards = document.querySelectorAll('.relay-card');
     function fmtTime(s) {
@@ -64,18 +131,26 @@
         return p(h) + ':' + p(m) + ':' + p(sec);
     }
 
-    function updateRelayUI(card, isOn) {
+    function updateRelayUI(card, isOn, intervalMinutes) {
+        if (!card || card.dataset.disabled === 'true' || card.classList.contains('relay-disabled')) {
+            return;
+        }
         var toggle = card.querySelector('.relay-toggle');
         var statusEl = card.querySelector('.relay-status');
         if (isOn) {
             card.classList.add('active');
             card.dataset.state = 'on';
             if (toggle) toggle.setAttribute('aria-checked', 'true');
-            var sec = parseInt(card.dataset.seconds, 10) || 1;
+            if (intervalMinutes !== undefined && intervalMinutes !== null) {
+                card.dataset.intervalMin = String(intervalMinutes);
+            }
+            var existingSec = parseInt(card.dataset.seconds, 10) || 0;
+            var sec = existingSec > 0 ? existingSec : 1;
             card.dataset.seconds = sec;
             if (statusEl) {
                 statusEl.style.color = 'var(--g9)';
-                statusEl.innerHTML = 'Aktif · <span class="relay-timer">' + fmtTime(sec) + '</span>';
+                statusEl.innerHTML = 'Aktif · <span class="relay-timer">' + fmtTime(sec) + '</span>' +
+                    (card.dataset.intervalMin ? ' (' + card.dataset.intervalMin + ' mnt)' : '');
             }
         } else {
             card.classList.remove('active');
@@ -89,11 +164,100 @@
         }
     }
 
+    function setRelayPendingUI(card, targetState) {
+        var statusEl = card.querySelector('.relay-status');
+        if (statusEl) {
+            statusEl.style.color = '#E65100';
+            statusEl.textContent = 'Menunggu status (' + (targetState ? 'ON' : 'OFF') + ')...';
+        }
+    }
+
+    function applyPumpsToRelayCards(pumpMap, activeIntervalMinutes) {
+        if (!pumpMap || typeof pumpMap !== 'object') return;
+        relayCards.forEach(function (card) {
+            var pumpKey = card.dataset.pump;
+            if (!pumpKey || pumpMap[pumpKey] === undefined) return;
+            var nextIsOn = String(pumpMap[pumpKey]).toLowerCase() === 'on';
+            updateRelayUI(card, nextIsOn, activeIntervalMinutes);
+        });
+    }
+
+    function publishPumpCommand(pumpOverrides) {
+        var settings = getMergedDashboardSettings();
+        var hasPumpCard = false;
+
+        relayCards.forEach(function (card) {
+            var pumpKey = card.dataset.pump;
+            if (!pumpKey || PUMP_KEYS.indexOf(pumpKey) === -1) return;
+            hasPumpCard = true;
+            if (pumpOverrides && pumpOverrides[pumpKey] !== undefined) {
+                settings[pumpKey] = pumpOverrides[pumpKey];
+            } else {
+                settings[pumpKey] = card.classList.contains('active') ? 'on' : 'off';
+            }
+        });
+
+        if (!hasPumpCard) return;
+
+        try {
+            localStorage.setItem('tefa_dashboard_settings', JSON.stringify(settings));
+        } catch (e) { }
+
+        if (typeof window.publishMqttSettings === 'function') {
+            window.publishMqttSettings(buildControlPayload(settings));
+        }
+    }
+
+    window.syncAdminPumpsUI = function (pumpsStatus, activeIntervalMinutes) {
+        var settings = getMergedDashboardSettings();
+        var updated = false;
+        var parsedInt = null;
+
+        if (activeIntervalMinutes !== undefined && activeIntervalMinutes !== null && !isNaN(Number(activeIntervalMinutes))) {
+            var candidateInt = parseInt(activeIntervalMinutes, 10);
+            if (candidateInt > 0) {
+                parsedInt = candidateInt;
+                settings.intervalMinutes = String(candidateInt);
+                var intEl = document.getElementById('set_interval_minutes');
+                if (intEl) intEl.value = settings.intervalMinutes;
+                updated = true;
+            }
+        }
+
+        if (pumpsStatus && typeof pumpsStatus === 'object') {
+            PUMP_KEYS.forEach(function (key) {
+                if (pumpsStatus[key] !== undefined) {
+                    settings[key] = String(pumpsStatus[key]).toLowerCase() === 'on' ? 'on' : 'off';
+                    updated = true;
+                }
+            });
+            applyPumpsToRelayCards(settings, parsedInt !== null ? parsedInt : activeIntervalMinutes);
+        }
+
+        if (updated) {
+            try {
+                localStorage.setItem('tefa_dashboard_settings', JSON.stringify(settings));
+            } catch (e) { }
+        }
+    };
+
     // Click event for each relay card
     relayCards.forEach(function (card) {
         card.addEventListener('click', function () {
-            var isOn = card.classList.contains('active');
-            updateRelayUI(card, !isOn);
+            if (card.dataset.disabled === 'true' || card.classList.contains('relay-disabled')) {
+                return;
+            }
+            var pumpKey = card.dataset.pump;
+            if (pumpKey && PUMP_KEYS.indexOf(pumpKey) !== -1) {
+                var targetIsOn = !card.classList.contains('active');
+                setRelayPendingUI(card, targetIsOn);
+                var overrides = {};
+                overrides[pumpKey] = targetIsOn ? 'on' : 'off';
+                publishPumpCommand(overrides);
+            } else {
+                var isOn = card.classList.contains('active');
+                updateRelayUI(card, !isOn);
+            }
         });
     });
 
@@ -104,18 +268,48 @@
     if (btnAllOn) {
         btnAllOn.addEventListener('click', function (e) {
             e.stopPropagation();
+            var pumpAffected = false;
+            var overrides = {};
             relayCards.forEach(function (card) {
-                updateRelayUI(card, true);
+                if (card.dataset.disabled === 'true' || card.classList.contains('relay-disabled')) {
+                    return;
+                }
+                var pumpKey = card.dataset.pump;
+                if (pumpKey && PUMP_KEYS.indexOf(pumpKey) !== -1) {
+                    pumpAffected = true;
+                    setRelayPendingUI(card, true);
+                    overrides[pumpKey] = 'on';
+                } else {
+                    updateRelayUI(card, true);
+                }
             });
+            if (pumpAffected) {
+                publishPumpCommand(overrides);
+            }
         });
     }
 
     if (btnAllOff) {
         btnAllOff.addEventListener('click', function (e) {
             e.stopPropagation();
+            var pumpAffected = false;
+            var overrides = {};
             relayCards.forEach(function (card) {
-                updateRelayUI(card, false);
+                if (card.dataset.disabled === 'true' || card.classList.contains('relay-disabled')) {
+                    return;
+                }
+                var pumpKey = card.dataset.pump;
+                if (pumpKey && PUMP_KEYS.indexOf(pumpKey) !== -1) {
+                    pumpAffected = true;
+                    setRelayPendingUI(card, false);
+                    overrides[pumpKey] = 'off';
+                } else {
+                    updateRelayUI(card, false);
+                }
             });
+            if (pumpAffected) {
+                publishPumpCommand(overrides);
+            }
         });
     }
 
@@ -133,20 +327,20 @@
         });
     }, 1000);
 
-    // Smooth Nav Indicator & Unified Scrollspy Logic
+    // Unified Navigation Scrollspy & Sliding Indicator
     var navContainer = document.getElementById('navLinksContainer');
     var navIndicator = document.getElementById('navIndicator');
     var navLinks = document.querySelectorAll('.nav-links a');
-    var isUserClicking = false;
-    var clickTimer = null;
     var spySectionIds = ['top', 'relay', 'telemetri', 'hardware', 'aws'];
-    var currentActiveSectionId = 'top';
+    var isUserNavClick = false;
+    var navClickTimer = null;
+    var currentNavSection = 'top';
 
     function moveNavIndicator(targetLink) {
         if (!navIndicator || !navContainer) return;
-        if (navContainer.offsetParent === null) return; // Hidden on mobile/tablet
+        if (navContainer.offsetParent === null) return;
         var activeLink = targetLink || navContainer.querySelector('a.active') || navLinks[0];
-        if (activeLink) {
+        if (activeLink && activeLink.offsetParent !== null) {
             var cRect = navContainer.getBoundingClientRect();
             var lRect = activeLink.getBoundingClientRect();
             if (lRect.width > 0) {
@@ -156,48 +350,73 @@
         }
     }
 
-    moveNavIndicator();
-    window.addEventListener('load', function() { moveNavIndicator(); handleScrollSpy(); });
-    window.addEventListener('resize', function() { moveNavIndicator(); });
-    if (document.fonts && document.fonts.ready) {
-        document.fonts.ready.then(function() { moveNavIndicator(); });
-    }
-    setTimeout(function() { moveNavIndicator(); handleScrollSpy(); }, 50);
-    setTimeout(function() { moveNavIndicator(); handleScrollSpy(); }, 250);
+    function syncActiveSection(secId, shouldMoveIndicator) {
+        currentNavSection = secId;
+        var desktopLinks = document.querySelectorAll('.nav-links a');
+        var mobileLinks = document.querySelectorAll('.mobile-nav-link');
+        var targetDesktopLink = null;
 
-    // Release click lock immediately if user manually scrolls with mouse wheel or touch
+        desktopLinks.forEach(function (l) {
+            if (l.getAttribute('href') === '#' + secId) {
+                l.classList.add('active');
+                targetDesktopLink = l;
+            } else {
+                l.classList.remove('active');
+            }
+        });
+
+        mobileLinks.forEach(function (ml) {
+            if (ml.getAttribute('href') === '#' + secId) {
+                ml.classList.add('active');
+            } else {
+                ml.classList.remove('active');
+            }
+        });
+
+        if (shouldMoveIndicator !== false && targetDesktopLink) {
+            moveNavIndicator(targetDesktopLink);
+        }
+    }
+    window.syncActiveSection = syncActiveSection;
+    window.setNavClicking = function (state) {
+        isUserNavClick = state;
+    };
+
     function releaseClickLock() {
-        if (isUserClicking) {
-            isUserClicking = false;
-            clearTimeout(clickTimer);
+        if (isUserNavClick) {
+            isUserNavClick = false;
+            clearTimeout(navClickTimer);
         }
     }
     window.addEventListener('wheel', releaseClickLock, { passive: true });
     window.addEventListener('touchmove', releaseClickLock, { passive: true });
 
-    // Smooth scroll on desktop nav link click
-    navLinks.forEach(function(link) {
-        link.addEventListener('click', function(e) {
-            var targetId = this.getAttribute('href');
-            if (targetId && targetId.startsWith('#')) {
+    // Indicator initialization and resize handling
+    window.addEventListener('load', function () { moveNavIndicator(); });
+    window.addEventListener('resize', function () { moveNavIndicator(); });
+    setTimeout(function () { moveNavIndicator(); }, 100);
+    setTimeout(function () { moveNavIndicator(); }, 300);
+    setTimeout(function () { moveNavIndicator(); }, 600);
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () { moveNavIndicator(); });
+    }
+
+    // Desktop nav click handling
+    navLinks.forEach(function (link) {
+        link.addEventListener('click', function (e) {
+            var targetHref = this.getAttribute('href');
+            if (targetHref && targetHref.startsWith('#')) {
                 e.preventDefault();
-                var targetEl = document.getElementById(targetId.substring(1));
+                var secId = targetHref.substring(1);
+                var targetEl = document.getElementById(secId);
                 if (targetEl) {
-                    isUserClicking = true;
-                    clearTimeout(clickTimer);
+                    isUserNavClick = true;
+                    clearTimeout(navClickTimer);
 
-                    navLinks.forEach(function(l) { l.classList.remove('active'); });
-                    this.classList.add('active');
-                    moveNavIndicator(this);
-
-                    var mobileNavLinks = document.querySelectorAll('.mobile-nav-link');
-                    mobileNavLinks.forEach(function(ml) {
-                        if (ml.getAttribute('href') === targetId) ml.classList.add('active');
-                        else ml.classList.remove('active');
-                    });
+                    syncActiveSection(secId, true);
 
                     var topRow = document.querySelector('.top-row');
-                    var navHeight = topRow ? topRow.offsetHeight + 20 : 80;
+                    var navHeight = topRow ? topRow.offsetHeight + 24 : 86;
                     var elementPosition = targetEl.getBoundingClientRect().top;
                     var offsetPosition = elementPosition + window.pageYOffset - navHeight;
 
@@ -206,17 +425,16 @@
                         behavior: 'smooth'
                     });
 
-                    currentActiveSectionId = targetId.substring(1);
-                    clickTimer = setTimeout(function() {
-                        isUserClicking = false;
+                    navClickTimer = setTimeout(function () {
+                        isUserNavClick = false;
                     }, 850);
                 }
             }
         });
     });
 
-    // Single unified scrollspy calculation
-    function handleScrollSpy() {
+    // Single unified scroll listener
+    window.addEventListener('scroll', function () {
         var topRow = document.querySelector('.top-row');
         if (topRow) {
             if (window.scrollY > 15) {
@@ -226,132 +444,118 @@
             }
         }
 
-        if (isUserClicking) return;
+        if (isUserNavClick) return;
 
-        var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-        var winHeight = window.innerHeight;
-        var docHeight = document.documentElement.scrollHeight;
-        var topRowHeight = topRow ? topRow.offsetHeight : 70;
-        var triggerOffset = scrollY + topRowHeight + 120;
+        var topRowHeight = topRow ? topRow.offsetHeight : 80;
+        var threshold = topRowHeight + 110;
+        var currentId = 'top';
 
-        var targetId = spySectionIds[0];
+        // Check if user scrolled to bottom of page (forcing AWS)
+        var scrollBottom = window.innerHeight + window.pageYOffset;
+        var docHeight = Math.max(
+            document.body.scrollHeight,
+            document.documentElement.scrollHeight,
+            document.body.offsetHeight,
+            document.documentElement.offsetHeight
+        );
+        var isAtBottom = scrollBottom >= (docHeight - 70);
 
-        if (scrollY + winHeight >= docHeight - 50) {
-            targetId = spySectionIds[spySectionIds.length - 1];
-        } else if (scrollY < 60) {
-            targetId = spySectionIds[0];
+        if (isAtBottom) {
+            currentId = 'aws';
+        } else if (window.pageYOffset < 60) {
+            currentId = 'top';
         } else {
-            for (var i = 0; i < spySectionIds.length; i++) {
-                var el = document.getElementById(spySectionIds[i]);
+            spySectionIds.forEach(function (id) {
+                var el = document.getElementById(id);
                 if (el) {
-                    var absTop = el.getBoundingClientRect().top + scrollY;
-                    if (absTop <= triggerOffset) {
-                        targetId = spySectionIds[i];
+                    var r = el.getBoundingClientRect();
+                    if (r.top <= threshold) {
+                        currentId = id;
                     }
                 }
-            }
+            });
         }
 
-        if (targetId !== currentActiveSectionId) {
-            currentActiveSectionId = targetId;
-
-            var activeLink = null;
-            navLinks.forEach(function(link) {
-                if (link.getAttribute('href') === '#' + targetId) {
-                    link.classList.add('active');
-                    activeLink = link;
-                } else {
-                    link.classList.remove('active');
-                }
-            });
-
-            var mobileNavLinks = document.querySelectorAll('.mobile-nav-link');
-            mobileNavLinks.forEach(function(ml) {
-                if (ml.getAttribute('href') === '#' + targetId) {
-                    ml.classList.add('active');
-                } else {
-                    ml.classList.remove('active');
-                }
-            });
-
-            if (activeLink) {
-                moveNavIndicator(activeLink);
-            }
-        }
-    }
-
-    var scrollTicking = false;
-    window.addEventListener('scroll', function() {
-        if (!scrollTicking) {
-            window.requestAnimationFrame(function() {
-                handleScrollSpy();
-                scrollTicking = false;
-            });
-            scrollTicking = true;
+        if (currentId !== currentNavSection) {
+            syncActiveSection(currentId, true);
+        } else if (navIndicator && (!navIndicator.style.width || navIndicator.style.width === '0px')) {
+            moveNavIndicator();
         }
     }, { passive: true });
 
-    // Clean Scroll Reveal Animation
+    // AOS (Animate On Scroll) Initialization & Staggered Card Setup
     function initScrollReveal() {
-        var revealSelectors = [
-            '.hero',
-            '.row2',
-            '.row3',
-            '.relay-sec',
-            '#relay',
-            '.card.chart',
-            '#telemetri',
-            '#hardware',
-            '.hwcards',
-            '.awsbar',
-            '.awsgrid'
-        ];
-
-        var revealElements = [];
-        revealSelectors.forEach(function (sel) {
+        ['.row2', '.row3', '.relay-sec', '.hwcards', '.awsgrid'].forEach(function (sel) {
             document.querySelectorAll(sel).forEach(function (el) {
-                if (!el.classList.contains('scroll-reveal')) {
-                    el.classList.add('scroll-reveal');
-                    revealElements.push(el);
-                }
+                el.removeAttribute('data-aos');
+                el.removeAttribute('data-aos-delay');
+                el.removeAttribute('data-aos-duration');
             });
         });
 
-        if ('IntersectionObserver' in window) {
-            var observer = new IntersectionObserver(function (entries, obs) {
-                entries.forEach(function (entry) {
-                    if (entry.isIntersecting) {
-                        entry.target.classList.add('revealed');
-                        obs.unobserve(entry.target);
-                    }
-                });
-            }, {
-                threshold: 0.05,
-                rootMargin: '60px 0px 60px 0px'
-            });
+        function applyAOS(el, anim, delay) {
+            if (!el) return;
+            if (!el.getAttribute('data-aos')) {
+                el.setAttribute('data-aos', anim || 'fade-up');
+            }
+            if (delay && !el.getAttribute('data-aos-delay')) {
+                el.setAttribute('data-aos-delay', String(delay));
+            }
+        }
 
-            revealElements.forEach(function (el) {
-                var rect = el.getBoundingClientRect();
-                if (rect.top < window.innerHeight + 60 && rect.bottom > -60) {
-                    el.classList.add('revealed');
-                } else {
-                    observer.observe(el);
-                }
-            });
+        document.querySelectorAll('.hero').forEach(function (el) {
+            applyAOS(el, 'fade-down', 0);
+        });
 
-            window.addEventListener('scroll', function () {
-                revealElements.forEach(function (el) {
-                    if (!el.classList.contains('revealed')) {
-                        var rect = el.getBoundingClientRect();
-                        if (rect.top < window.innerHeight + 60 && rect.bottom > -60) {
-                            el.classList.add('revealed');
-                        }
-                    }
-                });
-            }, { passive: true });
-        } else {
-            revealElements.forEach(function (el) {
-                el.classList.add('revealed');
+        document.querySelectorAll('.row2 .weather').forEach(function (el) {
+            applyAOS(el, 'fade-up', 60);
+        });
+        document.querySelectorAll('.row2 .sensor').forEach(function (el, idx) {
+            applyAOS(el, 'fade-up', 100 + idx * 80);
+        });
+
+        document.querySelectorAll('.row3 > .card').forEach(function (el, idx) {
+            applyAOS(el, 'fade-up', idx * 100);
+        });
+
+        document.querySelectorAll('.relay-head').forEach(function (el) {
+            applyAOS(el, 'fade-up', 0);
+        });
+        document.querySelectorAll('.relay-card').forEach(function (el, idx) {
+            applyAOS(el, 'zoom-in-up', (idx % 4) * 70);
+        });
+
+        document.querySelectorAll('.card.chart, .card.tcard').forEach(function (el, idx) {
+            applyAOS(el, 'fade-up', idx * 80);
+        });
+
+        document.querySelectorAll('#hardware, .awsbar').forEach(function (el) {
+            applyAOS(el, 'fade-up', 0);
+        });
+
+        document.querySelectorAll('.hwcards .hwc').forEach(function (el, idx) {
+            applyAOS(el, 'fade-up', idx * 75);
+        });
+
+        document.querySelectorAll('.awsgrid .awsc').forEach(function (el, idx) {
+            applyAOS(el, 'fade-up', (idx % 2) * 90);
+        });
+
+        document.querySelectorAll('footer').forEach(function (el) {
+            applyAOS(el, 'fade-up', 0);
+        });
+
+        if (window.AOS) {
+            window.AOS.init({
+                duration: 750,
+                easing: 'ease-out-cubic',
+                once: false,
+                mirror: true,
+                offset: 50,
+                anchorPlacement: 'top-bottom'
+            });
+            window.addEventListener('load', function () {
+                if (window.AOS) window.AOS.refresh();
             });
         }
     }
@@ -367,22 +571,51 @@
 
         if (!gearBtn || !backdrop) return;
 
-        var defaultSettings = {
-            phMin: '5,5', phMax: '6,5',
-            tdsMin: '600', tdsMax: '1200',
-            tempMin: '20', tempMax: '30',
-            humMin: '50', humMax: '85',
-            pompa: 'off',
-            ecTarget: '1.8',
-            phUpDose: '2',
-            phDownDose: '2',
-            interval: '3',
-            apiKey: ''
+        var defaultSettings = DEFAULT_DASHBOARD_SETTINGS;
+
+        var aiProviderPlaceholders = {
+            gemini: 'Masukkan Gemini API Key (AIza...)...',
+            groq: 'Masukkan Groq API Key (gsk_...)...',
+            qwen: 'Masukkan Qwen / DashScope API Key (sk-...)...',
+            openai: 'Masukkan OpenAI API Key (sk-...)...',
+            deepseek: 'Masukkan DeepSeek API Key (sk-...)...',
+            openrouter: 'Masukkan OpenRouter API Key (sk-or-...)...'
         };
+
+        function updateAiKeyPlaceholder(provider) {
+            var keyInput = document.getElementById('set_ai_api_key');
+            if (!keyInput) return;
+            keyInput.placeholder = aiProviderPlaceholders[provider] || 'Masukkan API Key...';
+        }
+
+        function detectProviderFromApiKey(key) {
+            var k = String(key || '').trim();
+            if (k.indexOf('AIza') === 0) return 'gemini';
+            if (k.indexOf('gsk_') === 0) return 'groq';
+            if (k.indexOf('sk-or-') === 0) return 'openrouter';
+            return '';
+        }
+
+        var aiProviderSelect = document.getElementById('set_ai_provider');
+        var aiKeyInputEl = document.getElementById('set_ai_api_key');
+        if (aiProviderSelect) {
+            aiProviderSelect.addEventListener('change', function () {
+                updateAiKeyPlaceholder(aiProviderSelect.value);
+            });
+        }
+        if (aiKeyInputEl && aiProviderSelect) {
+            aiKeyInputEl.addEventListener('input', function () {
+                var detected = detectProviderFromApiKey(aiKeyInputEl.value);
+                if (detected && !(detected === 'groq' && aiProviderSelect.value === 'qwen')) {
+                    aiProviderSelect.value = detected;
+                    updateAiKeyPlaceholder(detected);
+                }
+            });
+        }
 
         function loadSettings() {
             try {
-                var saved = JSON.parse(localStorage.getItem('tefa_dashboard_settings') || '{}');
+                var saved = getMergedDashboardSettings();
                 document.getElementById('set_ph_min').value = saved.phMin || defaultSettings.phMin;
                 document.getElementById('set_ph_max').value = saved.phMax || defaultSettings.phMax;
                 document.getElementById('set_tds_min').value = saved.tdsMin || defaultSettings.tdsMin;
@@ -391,12 +624,19 @@
                 document.getElementById('set_temp_max').value = saved.tempMax || defaultSettings.tempMax;
                 document.getElementById('set_hum_min').value = saved.humMin || defaultSettings.humMin;
                 document.getElementById('set_hum_max').value = saved.humMax || defaultSettings.humMax;
-                if (document.getElementById('set_pompa')) document.getElementById('set_pompa').value = saved.pompa || defaultSettings.pompa;
+                if (document.getElementById('set_mqtt_broker')) document.getElementById('set_mqtt_broker').value = saved.mqttBroker || defaultSettings.mqttBroker;
+                if (document.getElementById('set_mqtt_topic_sub')) document.getElementById('set_mqtt_topic_sub').value = saved.mqttTopicSub || defaultSettings.mqttTopicSub;
+                if (document.getElementById('set_mqtt_topic_pub')) document.getElementById('set_mqtt_topic_pub').value = saved.mqttTopicPub || defaultSettings.mqttTopicPub;
+                if (document.getElementById('set_mqtt_topic_status')) document.getElementById('set_mqtt_topic_status').value = saved.mqttTopicStatus || defaultSettings.mqttTopicStatus;
+                if (document.getElementById('set_interval_minutes')) document.getElementById('set_interval_minutes').value = saved.intervalMinutes || defaultSettings.intervalMinutes;
                 if (document.getElementById('set_ec_target')) document.getElementById('set_ec_target').value = saved.ecTarget || defaultSettings.ecTarget;
-                if (document.getElementById('set_ph_up_dose')) document.getElementById('set_ph_up_dose').value = saved.phUpDose || defaultSettings.phUpDose;
-                if (document.getElementById('set_ph_down_dose')) document.getElementById('set_ph_down_dose').value = saved.phDownDose || defaultSettings.phDownDose;
-                document.getElementById('set_telemetry_interval').value = saved.interval || defaultSettings.interval;
+                if (document.getElementById('set_ph_up_dose')) document.getElementById('set_ph_up_dose').value = (saved.phUpDose !== undefined && saved.phUpDose !== '') ? saved.phUpDose : defaultSettings.phUpDose;
+                if (document.getElementById('set_ph_down_dose')) document.getElementById('set_ph_down_dose').value = (saved.phDownDose !== undefined && saved.phDownDose !== '') ? saved.phDownDose : defaultSettings.phDownDose;
+                if (document.getElementById('set_telemetry_interval')) document.getElementById('set_telemetry_interval').value = saved.interval || defaultSettings.interval;
+                var provider = saved.aiProvider || defaultSettings.aiProvider;
+                if (aiProviderSelect) aiProviderSelect.value = provider;
                 document.getElementById('set_ai_api_key').value = saved.apiKey || defaultSettings.apiKey;
+                updateAiKeyPlaceholder(provider);
             } catch (e) {
                 console.error('Failed to load settings:', e);
             }
@@ -473,19 +713,38 @@
                 document.getElementById('set_temp_max').value = defaultSettings.tempMax;
                 document.getElementById('set_hum_min').value = defaultSettings.humMin;
                 document.getElementById('set_hum_max').value = defaultSettings.humMax;
-                if (document.getElementById('set_pompa')) document.getElementById('set_pompa').value = defaultSettings.pompa;
+                if (document.getElementById('set_mqtt_broker')) document.getElementById('set_mqtt_broker').value = defaultSettings.mqttBroker;
+                if (document.getElementById('set_mqtt_topic_sub')) document.getElementById('set_mqtt_topic_sub').value = defaultSettings.mqttTopicSub;
+                if (document.getElementById('set_mqtt_topic_pub')) document.getElementById('set_mqtt_topic_pub').value = defaultSettings.mqttTopicPub;
+                if (document.getElementById('set_mqtt_topic_status')) document.getElementById('set_mqtt_topic_status').value = defaultSettings.mqttTopicStatus;
+                if (document.getElementById('set_interval_minutes')) document.getElementById('set_interval_minutes').value = defaultSettings.intervalMinutes;
                 if (document.getElementById('set_ec_target')) document.getElementById('set_ec_target').value = defaultSettings.ecTarget;
                 if (document.getElementById('set_ph_up_dose')) document.getElementById('set_ph_up_dose').value = defaultSettings.phUpDose;
                 if (document.getElementById('set_ph_down_dose')) document.getElementById('set_ph_down_dose').value = defaultSettings.phDownDose;
-                document.getElementById('set_telemetry_interval').value = defaultSettings.interval;
+                relayCards.forEach(function (card) { updateRelayUI(card, false); });
+                if (document.getElementById('set_telemetry_interval')) document.getElementById('set_telemetry_interval').value = defaultSettings.interval;
+                if (aiProviderSelect) aiProviderSelect.value = defaultSettings.aiProvider;
                 document.getElementById('set_ai_api_key').value = defaultSettings.apiKey;
+                updateAiKeyPlaceholder(defaultSettings.aiProvider);
                 localStorage.removeItem('tefa_dashboard_settings');
+                if (typeof window.updateMqttConnectionConfig === 'function') {
+                    window.updateMqttConnectionConfig({
+                        brokerUrl: defaultSettings.mqttBroker,
+                        topic: defaultSettings.mqttTopicSub,
+                        publishTopic: defaultSettings.mqttTopicPub,
+                        statusTopic: defaultSettings.mqttTopicStatus
+                    });
+                }
             });
         }
 
         if (saveBtn) {
             saveBtn.addEventListener('click', function () {
-                var pompaEl = document.getElementById('set_pompa');
+                var mqttBrokerEl = document.getElementById('set_mqtt_broker');
+                var mqttSubEl = document.getElementById('set_mqtt_topic_sub');
+                var mqttPubEl = document.getElementById('set_mqtt_topic_pub');
+                var mqttStatusEl = document.getElementById('set_mqtt_topic_status');
+                var intervalMinEl = document.getElementById('set_interval_minutes');
                 var ecTargetEl = document.getElementById('set_ec_target');
                 var phUpEl = document.getElementById('set_ph_up_dose');
                 var phDownEl = document.getElementById('set_ph_down_dose');
@@ -499,26 +758,41 @@
                     tempMax: document.getElementById('set_temp_max').value.trim(),
                     humMin: document.getElementById('set_hum_min').value.trim(),
                     humMax: document.getElementById('set_hum_max').value.trim(),
-                    pompa: pompaEl ? pompaEl.value : 'off',
-                    ecTarget: ecTargetEl ? ecTargetEl.value.trim() : '1.5',
-                    phUpDose: phUpEl ? phUpEl.value.trim() : '5',
-                    phDownDose: phDownEl ? phDownEl.value.trim() : '5',
-                    interval: document.getElementById('set_telemetry_interval').value,
+                    mqttBroker: (mqttBrokerEl && mqttBrokerEl.value.trim()) || defaultSettings.mqttBroker,
+                    mqttTopicSub: (mqttSubEl && mqttSubEl.value.trim()) || defaultSettings.mqttTopicSub,
+                    mqttTopicPub: (mqttPubEl && mqttPubEl.value.trim()) || defaultSettings.mqttTopicPub,
+                    mqttTopicStatus: (mqttStatusEl && mqttStatusEl.value.trim()) || defaultSettings.mqttTopicStatus,
+                    intervalMinutes: (intervalMinEl && intervalMinEl.value.trim()) || defaultSettings.intervalMinutes,
+                    ecTarget: ecTargetEl ? ecTargetEl.value.trim() : defaultSettings.ecTarget,
+                    phUpDose: phUpEl ? phUpEl.value.trim() : defaultSettings.phUpDose,
+                    phDownDose: phDownEl ? phDownEl.value.trim() : defaultSettings.phDownDose,
+                    interval: document.getElementById('set_telemetry_interval') ? document.getElementById('set_telemetry_interval').value : defaultSettings.interval,
+                    aiProvider: aiProviderSelect ? aiProviderSelect.value : defaultSettings.aiProvider,
                     apiKey: document.getElementById('set_ai_api_key').value.trim()
                 };
+                PUMP_KEYS.forEach(function (key) {
+                    newSettings[key] = defaultSettings[key];
+                });
+                relayCards.forEach(function (card) {
+                    var pumpKey = card.dataset.pump;
+                    if (pumpKey && PUMP_KEYS.indexOf(pumpKey) !== -1) {
+                        newSettings[pumpKey] = card.classList.contains('active') ? 'on' : 'off';
+                    }
+                });
+
                 localStorage.setItem('tefa_dashboard_settings', JSON.stringify(newSettings));
 
-                // Publish setting ke MQTT dalam format JSON tefa/hidroponik/aktuator
-                var publishPayload = {
-                    pompa: newSettings.pompa,
-                    threshold: {
-                        ph_min: parseFloat(newSettings.phMin.replace(',', '.')) || 5.5,
-                        ph_max: parseFloat(newSettings.phMax.replace(',', '.')) || 6.5,
-                        ec_target: parseFloat(newSettings.ecTarget.replace(',', '.')) || 1.8,
-                        ph_up_dose_sec: parseFloat(newSettings.phUpDose) || 0,
-                        ph_down_dose_sec: parseFloat(newSettings.phDownDose) || 0
-                    }
-                };
+                if (typeof window.updateMqttConnectionConfig === 'function') {
+                    window.updateMqttConnectionConfig({
+                        brokerUrl: newSettings.mqttBroker,
+                        topic: newSettings.mqttTopicSub,
+                        publishTopic: newSettings.mqttTopicPub,
+                        statusTopic: newSettings.mqttTopicStatus
+                    });
+                }
+
+                // Publish setting ke MQTT dalam format JSON tefa/hidroponik/control
+                var publishPayload = buildControlPayload(newSettings);
                 var publishResult = 'offline';
                 if (typeof window.publishMqttSettings === 'function') {
                     publishResult = window.publishMqttSettings(publishPayload);
@@ -527,7 +801,7 @@
                 var originalText = saveBtn.textContent;
                 if (publishResult === 'sent' || publishResult === true) {
                     saveBtn.textContent = 'SAVED & SENT ✓';
-                    saveBtn.style.background = '#2E7D32';
+                    saveBtn.style.background = '#1B4332';
                 } else if (publishResult === 'queued') {
                     saveBtn.textContent = 'SAVED (MENUNGGU MQTT)';
                     saveBtn.style.background = '#E65100';
@@ -537,7 +811,7 @@
                 }
                 setTimeout(function () {
                     saveBtn.textContent = originalText;
-                    saveBtn.style.background = '#1B5E20';
+                    saveBtn.style.background = '#0D2818';
                     closeModal();
                 }, 800);
             });
@@ -550,7 +824,7 @@
         });
     }
 
-    // AI Assistant Popup Logic (Circle Expand Animation & Chat)
+    // AI Assistant Popup Logic (Circle Expand Animation, Chat, STT, TTS & Halftone Voice Orb)
     function initAIAssistant() {
         var aiBtn = document.getElementById('aiAssistantBtn');
         var aiPopup = document.getElementById('aiChatPopup');
@@ -559,8 +833,1004 @@
         var aiSend = document.getElementById('aiBtnSend');
         var aiInput = document.getElementById('aiInput');
         var aiMessages = document.getElementById('aiChatMessages');
+        var aiBtnTtsToggle = document.getElementById('aiBtnTtsToggle');
+        var aiBtnVoiceOrb = document.getElementById('aiBtnVoiceOrb');
+        var aiBtnMic = document.getElementById('aiBtnMic');
+        var voicePanel = document.getElementById('aiVoiceOrbPanel');
+        var orbStatusBadge = document.getElementById('aiOrbStatusBadge');
+        var orbMicBtn = document.getElementById('aiOrbMicBtn');
+        var orbBackBtn = document.getElementById('aiOrbBackBtn');
+        var orbCloseBtn = document.getElementById('aiOrbCloseBtn');
+        var orbResizeHandle = document.getElementById('aiOrbResizeHandle');
+        var orbSizeDownBtn = document.getElementById('aiOrbSizeDownBtn');
+        var orbSizeUpBtn = document.getElementById('aiOrbSizeUpBtn');
+        var orbTrigger = document.getElementById('aiOrbTrigger');
+        var orbTopbar = voicePanel ? voicePanel.querySelector('.ai-voice-orb-topbar') : null;
+        var orbCanvas = document.getElementById('aiVoiceOrbCanvas');
+        var orbTranscript = document.getElementById('aiOrbTranscript');
 
         if (!aiBtn || !aiPopup) return;
+
+        var DEFAULT_ORB_HINT = 'Generate expressive prompts by speaking naturally. Ketuk orb untuk mulai bertanya dengan suara.';
+        var MIN_ORB_SIZE = 120;
+        var MAX_ORB_SIZE = 560;
+        var currentOrbSize = window.innerWidth <= 680 ? 180 : 380;
+        var suppressOrbClick = false;
+        var ttsEnabled = true;
+        var isListening = false;
+        var isSpeaking = false;
+        var orbMode = 'idle'; // 'idle' | 'listening' | 'speaking'
+        var orbRafId = null;
+        var orbPhase = 0;
+        var smoothedEnergy = 0;
+        var speechPulse = 0;
+        var recognition = null;
+        var latestTranscript = '';
+        var audioCtx = null;
+        var analyser = null;
+        var freqData = null;
+        var micStream = null;
+        var activeSpeakBtn = null;
+        var preferredVoice = null;
+
+        function resolveIndonesianVoice() {
+            if (!('speechSynthesis' in window)) return null;
+            var voices = window.speechSynthesis.getVoices() || [];
+            for (var i = 0; i < voices.length; i++) {
+                if (voices[i].lang && voices[i].lang.toLowerCase().indexOf('id') === 0) {
+                    return voices[i];
+                }
+            }
+            for (var j = 0; j < voices.length; j++) {
+                if (voices[j].default) return voices[j];
+            }
+            return voices[0] || null;
+        }
+
+        if ('speechSynthesis' in window) {
+            preferredVoice = resolveIndonesianVoice();
+            if (typeof window.speechSynthesis.onvoiceschanged !== 'undefined') {
+                window.speechSynthesis.onvoiceschanged = function () {
+                    preferredVoice = resolveIndonesianVoice();
+                };
+            }
+        }
+
+        function setOrbStatus(text, stateClass) {
+            if (orbStatusBadge) orbStatusBadge.textContent = text;
+            if (!voicePanel) return;
+            voicePanel.classList.remove('is-listening', 'is-speaking');
+            if (stateClass) voicePanel.classList.add(stateClass);
+        }
+
+        function setOrbTranscript(text, isActiveSpeech) {
+            if (!orbTranscript) return;
+            orbTranscript.textContent = text;
+            if (isActiveSpeech) {
+                orbTranscript.classList.add('active-speech');
+            } else {
+                orbTranscript.classList.remove('active-speech');
+            }
+        }
+
+        function updateMicButtonsUI(active) {
+            if (aiBtnMic) aiBtnMic.classList.toggle('listening', active);
+            if (orbMicBtn) orbMicBtn.classList.toggle('active', active);
+        }
+
+        function updateTtsToggleUI() {
+            if (!aiBtnTtsToggle) return;
+            aiBtnTtsToggle.classList.toggle('active', ttsEnabled);
+            aiBtnTtsToggle.title = ttsEnabled
+                ? 'Suara AI (Text-to-Speech) Aktif'
+                : 'Suara AI (Text-to-Speech) Nonaktif';
+            var volOn = aiBtnTtsToggle.querySelector('.icon-vol-on');
+            var volOff = aiBtnTtsToggle.querySelector('.icon-vol-off');
+            if (volOn) volOn.style.display = ttsEnabled ? '' : 'none';
+            if (volOff) volOff.style.display = ttsEnabled ? 'none' : '';
+        }
+
+        function stopMicAnalyser() {
+            if (micStream) {
+                var tracks = micStream.getTracks();
+                for (var i = 0; i < tracks.length; i++) {
+                    tracks[i].stop();
+                }
+                micStream = null;
+            }
+            if (audioCtx && typeof audioCtx.close === 'function') {
+                try {
+                    audioCtx.close();
+                } catch (err) {
+                    // ignore AudioContext close errors
+                }
+            }
+            audioCtx = null;
+            analyser = null;
+            freqData = null;
+        }
+
+        function startMicAnalyser() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+            var AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) return;
+
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+                if (!isListening) {
+                    stream.getTracks().forEach(function (t) { t.stop(); });
+                    return;
+                }
+                micStream = stream;
+                audioCtx = new AudioCtx();
+                var source = audioCtx.createMediaStreamSource(stream);
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 64;
+                analyser.smoothingTimeConstant = 0.78;
+                source.connect(analyser);
+                freqData = new Uint8Array(analyser.frequencyBinCount);
+            }).catch(function () {
+                // Fallback gracefully to procedural + speechPulse reactivity
+            });
+        }
+
+        function resetSpeakButtons() {
+            if (!aiMessages) return;
+            var btns = aiMessages.querySelectorAll('.ai-msg-speak-btn.speaking');
+            for (var i = 0; i < btns.length; i++) {
+                btns[i].classList.remove('speaking');
+                var label = btns[i].querySelector('span');
+                if (label) label.textContent = 'Dengarkan';
+            }
+            activeSpeakBtn = null;
+        }
+
+        function stopSpeaking() {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+            isSpeaking = false;
+            resetSpeakButtons();
+            if (!isListening) {
+                orbMode = 'idle';
+                setOrbStatus('Ketuk Orb untuk Bicara', '');
+            }
+        }
+
+        function speakText(text, btnEl) {
+            if (!('speechSynthesis' in window) || !text) return;
+
+            var clickedSameActive = btnEl && activeSpeakBtn === btnEl && isSpeaking;
+            stopSpeaking();
+            if (clickedSameActive) return;
+
+            var cleanText = String(text).replace(/\s+/g, ' ').trim();
+            if (!cleanText) return;
+
+            var utterance = new SpeechSynthesisUtterance(cleanText);
+            if (!preferredVoice) preferredVoice = resolveIndonesianVoice();
+            if (preferredVoice) utterance.voice = preferredVoice;
+            utterance.lang = 'id-ID';
+            utterance.rate = 1.02;
+            utterance.pitch = 1.0;
+
+            if (btnEl) {
+                activeSpeakBtn = btnEl;
+                btnEl.classList.add('speaking');
+                var spanEl = btnEl.querySelector('span');
+                if (spanEl) spanEl.textContent = 'Berhenti';
+            }
+
+            utterance.onstart = function () {
+                isSpeaking = true;
+                if (!isListening) {
+                    orbMode = 'speaking';
+                    setOrbStatus('AI Sedang Berbicara...', 'is-speaking');
+                }
+            };
+
+            utterance.onend = function () {
+                isSpeaking = false;
+                resetSpeakButtons();
+                if (!isListening) {
+                    orbMode = 'idle';
+                    setOrbStatus('Ketuk Orb untuk Bicara', '');
+                }
+            };
+
+            utterance.onerror = function () {
+                isSpeaking = false;
+                resetSpeakButtons();
+                if (!isListening) {
+                    orbMode = 'idle';
+                    setOrbStatus('Ketuk Orb untuk Bicara', '');
+                }
+            };
+
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // Render Halftone Concentric Ring Voice Orb on Pure Black Canvas
+        function renderVoiceOrbFrame() {
+            if (!orbCanvas || !voicePanel || !voicePanel.classList.contains('open')) {
+                orbRafId = null;
+                return;
+            }
+
+            var ctx = orbCanvas.getContext('2d');
+            if (!ctx) return;
+
+            var w = orbCanvas.width;
+            var h = orbCanvas.height;
+            var cx = w * 0.5;
+            var cy = h * 0.5;
+            var R = Math.min(w, h) * 0.44;
+            var step = 6;
+
+            ctx.clearRect(0, 0, w, h);
+
+            var targetEnergy = 0.04;
+            if (orbMode === 'listening') {
+                var micLevel = 0;
+                if (analyser && freqData) {
+                    analyser.getByteFrequencyData(freqData);
+                    var sum = 0;
+                    for (var f = 0; f < freqData.length; f++) {
+                        sum += freqData[f];
+                    }
+                    micLevel = Math.min(1, (sum / (freqData.length * 145)));
+                }
+                var basePulse = 0.16 + 0.07 * Math.sin(orbPhase * 1.9);
+                targetEnergy = Math.min(1, Math.max(basePulse, micLevel * 0.95) + speechPulse * 0.45);
+            } else if (orbMode === 'speaking') {
+                var cadence = Math.abs(Math.sin(orbPhase * 2.4)) * 0.48
+                    + Math.abs(Math.cos(orbPhase * 3.9)) * 0.28
+                    + Math.sin(orbPhase * 1.1) * 0.08;
+                targetEnergy = Math.min(1, 0.22 + Math.max(0, cadence) * 0.65);
+            }
+
+            speechPulse *= 0.88;
+            smoothedEnergy += (targetEnergy - smoothedEnergy) * 0.18;
+            orbPhase += orbMode === 'idle' ? 0.032 : (0.075 + smoothedEnergy * 0.08);
+
+            // Soft circular dark sphere strictly within orb radius so outside remains transparent
+            var sphereRadius = R * 1.06;
+            var sphereGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, sphereRadius);
+            sphereGrad.addColorStop(0, 'rgba(6, 10, 8, 0.94)');
+            sphereGrad.addColorStop(0.58, 'rgba(6, 10, 8, 0.88)');
+            sphereGrad.addColorStop(0.86, 'rgba(6, 10, 8, 0.56)');
+            sphereGrad.addColorStop(1, 'rgba(6, 10, 8, 0)');
+            ctx.beginPath();
+            ctx.arc(cx, cy, sphereRadius, 0, Math.PI * 2);
+            ctx.fillStyle = sphereGrad;
+            ctx.fill();
+
+            // Translucent center grey core disk (under dot grid so grid dots remain visible across it)
+            var coreRadius = (0.125 + smoothedEnergy * 0.024) * R;
+            ctx.beginPath();
+            ctx.arc(cx, cy, coreRadius, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(155, 158, 156, ' + (0.52 + smoothedEnergy * 0.16).toFixed(3) + ')';
+            ctx.fill();
+
+            // Orthogonal cartesian halftone dot matrix clipped inside circle radius R
+            var ringCenter = 0.38 + smoothedEnergy * 0.042;
+            var ringSpread = 0.082 + smoothedEnergy * 0.034;
+
+            for (var dy = -R; dy <= R; dy += step) {
+                for (var dx = -R; dx <= R; dx += step) {
+                    var r = Math.sqrt(dx * dx + dy * dy);
+                    if (r > R) continue;
+
+                    var u = r / R;
+                    var theta = Math.atan2(dy, dx);
+                    var angularWave =
+                        Math.sin(theta * 3 + orbPhase) * (0.012 + smoothedEnergy * 0.032) +
+                        Math.cos(theta * 5 - orbPhase * 1.35) * (0.008 + smoothedEnergy * 0.022);
+
+                    var localCenter = ringCenter + angularWave;
+                    var ringVal = Math.exp(-Math.pow((u - localCenter) / ringSpread, 2));
+
+                    var outerFalloff = 0;
+                    if (u > localCenter) {
+                        var tOut = Math.min(1, (u - localCenter) / Math.max(0.01, 1 - localCenter));
+                        outerFalloff = Math.pow(1 - tOut, 1.85) * 0.56;
+                    } else {
+                        var tIn = u / Math.max(0.01, localCenter);
+                        outerFalloff = (0.20 + 0.16 * tIn);
+                    }
+
+                    var intensity = Math.min(1, ringVal * 1.18 + outerFalloff * 0.85);
+                    var edgeFade = u > 0.9 ? Math.max(0.15, (1 - u) / 0.1) : 1;
+
+                    // Compute halftone dot half-size: inside bright ring dots exceed step/2 so they merge smoothly
+                    var halfSize = 0.42 + Math.pow(intensity, 1.65) * (3.15 + smoothedEnergy * 1.1);
+                    if (u < 0.12) {
+                        halfSize = 0.72 + smoothedEnergy * 0.35;
+                    }
+
+                    var alpha = Math.min(1, (0.28 + Math.pow(intensity, 1.1) * 0.72) * edgeFade);
+                    if (u < 0.12) alpha = 0.42 + smoothedEnergy * 0.18;
+
+                    ctx.fillStyle = 'rgba(255, 255, 255, ' + alpha.toFixed(3) + ')';
+                    var px = cx + dx;
+                    var py = cy + dy;
+                    ctx.fillRect(px - halfSize, py - halfSize, halfSize * 2, halfSize * 2);
+                }
+            }
+
+            orbRafId = window.requestAnimationFrame(renderVoiceOrbFrame);
+        }
+
+        function startOrbAnimation() {
+            if (orbRafId !== null) return;
+            orbRafId = window.requestAnimationFrame(renderVoiceOrbFrame);
+        }
+
+        function stopOrbAnimation() {
+            if (orbRafId !== null) {
+                window.cancelAnimationFrame(orbRafId);
+                orbRafId = null;
+            }
+        }
+
+        function clampOrbPanelToViewport() {
+            if (!voicePanel || !voicePanel.classList.contains('has-custom-pos')) return;
+            var rect = voicePanel.getBoundingClientRect();
+            var maxLeft = Math.max(8, window.innerWidth - rect.width - 8);
+            var maxTop = Math.max(8, window.innerHeight - rect.height - 8);
+            var clampedLeft = Math.min(maxLeft, Math.max(8, rect.left));
+            var clampedTop = Math.min(maxTop, Math.max(8, rect.top));
+            voicePanel.style.left = clampedLeft + 'px';
+            voicePanel.style.top = clampedTop + 'px';
+        }
+
+        function setOrbSize(nextSize) {
+            var isMobile = window.innerWidth <= 680;
+            var maxFit = isMobile
+                ? Math.min(240, window.innerWidth - 56, window.innerHeight - 130)
+                : Math.min(MAX_ORB_SIZE, window.innerWidth - 40, window.innerHeight - 110);
+            var upper = Math.max(MIN_ORB_SIZE, maxFit);
+            currentOrbSize = Math.round(Math.min(upper, Math.max(MIN_ORB_SIZE, nextSize)));
+            if (orbCanvas) {
+                orbCanvas.style.width = currentOrbSize + 'px';
+                orbCanvas.style.height = currentOrbSize + 'px';
+            }
+            clampOrbPanelToViewport();
+        }
+
+        function attachPanelDrag(handleEl, isOrbSurface) {
+            if (!handleEl || !voicePanel) return;
+            handleEl.addEventListener('pointerdown', function (e) {
+                if (e.button && e.button !== 0) return;
+                if (orbResizeHandle && (e.target === orbResizeHandle || orbResizeHandle.contains(e.target))) return;
+                if (!isOrbSurface && e.target.closest('button')) return;
+
+                var startX = e.clientX;
+                var startY = e.clientY;
+                var panelRect = voicePanel.getBoundingClientRect();
+                var startLeft = panelRect.left;
+                var startTop = panelRect.top;
+                var moved = false;
+
+                function onPointerMove(ev) {
+                    var dx = ev.clientX - startX;
+                    var dy = ev.clientY - startY;
+                    if (!moved && Math.hypot(dx, dy) < 6) return;
+                    if (!moved) {
+                        moved = true;
+                        if (isOrbSurface) suppressOrbClick = true;
+                        voicePanel.classList.add('has-custom-pos', 'is-dragging');
+                        voicePanel.style.left = startLeft + 'px';
+                        voicePanel.style.top = startTop + 'px';
+                    }
+                    var curRect = voicePanel.getBoundingClientRect();
+                    var maxLeft = Math.max(8, window.innerWidth - curRect.width - 8);
+                    var maxTop = Math.max(8, window.innerHeight - curRect.height - 8);
+                    voicePanel.style.left = Math.min(maxLeft, Math.max(8, startLeft + dx)) + 'px';
+                    voicePanel.style.top = Math.min(maxTop, Math.max(8, startTop + dy)) + 'px';
+                }
+
+                function onPointerUp() {
+                    window.removeEventListener('pointermove', onPointerMove);
+                    window.removeEventListener('pointerup', onPointerUp);
+                    window.removeEventListener('pointercancel', onPointerUp);
+                    voicePanel.classList.remove('is-dragging');
+                    if (moved && isOrbSurface) {
+                        setTimeout(function () {
+                            suppressOrbClick = false;
+                        }, 60);
+                    }
+                }
+
+                window.addEventListener('pointermove', onPointerMove);
+                window.addEventListener('pointerup', onPointerUp);
+                window.addEventListener('pointercancel', onPointerUp);
+            });
+        }
+
+        function openVoiceOrb() {
+            if (!voicePanel) return;
+            if (!voicePanel.classList.contains('has-custom-pos')) {
+                voicePanel.style.left = '';
+                voicePanel.style.top = '';
+            }
+            aiPopup.classList.remove('open', 'closing');
+            aiBtn.classList.add('hidden');
+            voicePanel.classList.add('open');
+            voicePanel.setAttribute('aria-hidden', 'false');
+            if (window.innerWidth <= 680 && currentOrbSize > 200) {
+                currentOrbSize = 180;
+            }
+            setOrbSize(currentOrbSize);
+            if (aiBtnVoiceOrb) aiBtnVoiceOrb.classList.add('voice-active');
+            startOrbAnimation();
+        }
+
+        function closeVoiceOrb(reopenChat) {
+            if (!voicePanel) return;
+            if (isListening) stopListening();
+            if (!reopenChat) stopSpeaking();
+            voicePanel.classList.remove('open', 'is-listening', 'is-speaking');
+            voicePanel.setAttribute('aria-hidden', 'true');
+            if (aiBtnVoiceOrb) aiBtnVoiceOrb.classList.remove('voice-active');
+            stopOrbAnimation();
+            if (reopenChat) {
+                openPopup();
+            } else {
+                aiBtn.classList.remove('hidden');
+            }
+        }
+
+        function readDashboardTelemetry() {
+            var sensors = [];
+            var sensorCards = document.querySelectorAll('.sensors .sensor');
+            for (var i = 0; i < sensorCards.length; i++) {
+                var lblEl = sensorCards[i].querySelector('.lbl');
+                var bigEl = sensorCards[i].querySelector('.big');
+                var stEl = sensorCards[i].querySelector('.st');
+                if (lblEl && bigEl) {
+                    sensors.push(
+                        lblEl.textContent.trim().toUpperCase() + ': ' +
+                        bigEl.textContent.trim() +
+                        (stEl ? ' (' + stEl.textContent.trim() + ')' : '')
+                    );
+                }
+            }
+            var weatherTempEl = document.querySelector('.weather .temp');
+            var weatherDescEl = document.querySelector('.weather .desc');
+            var waterTempEl = document.querySelector('.donut b');
+            return {
+                sensorsSummary: sensors.length ? sensors.join(', ') : 'pH, Nutrisi, Cahaya N/A',
+                weatherTemp: weatherTempEl ? weatherTempEl.textContent.trim() : 'N/A',
+                weatherDesc: weatherDescEl ? weatherDescEl.textContent.trim() : 'Terputus',
+                waterTemp: waterTempEl ? waterTempEl.textContent.trim() : 'N/A'
+            };
+        }
+
+        function generateAiReply(text) {
+            var lower = text.toLowerCase();
+            var t = readDashboardTelemetry();
+
+            if (lower.includes('ph') || lower.includes('nutrisi') || lower.includes('tds') || lower.includes('ec') || lower.includes('cahaya') || lower.includes('lux')) {
+                return 'Pembacaan sensor saat ini: ' + t.sensorsSummary + '. Suhu air tercatat ' + t.waterTemp + '.';
+            }
+            if (lower.includes('suhu') || lower.includes('cuaca') || lower.includes('kelembaban') || lower.includes('kelembapan') || lower.includes('aws')) {
+                return 'Kondisi lingkungan greenhouse: suhu udara ' + t.weatherTemp + ' dengan status ' + t.weatherDesc + ', dan suhu air ' + t.waterTemp + '.';
+            }
+            if (lower.includes('status') || lower.includes('sensor') || lower.includes('cek') || lower.includes('diagnosa')) {
+                return 'Ringkasan telemetri: ' + t.sensorsSummary + '. Suhu air ' + t.waterTemp + ', status cuaca ' + t.weatherDesc + '. Pastikan mikrokontroler aktif bila nilai masih N/A.';
+            }
+            if (lower.includes('relay') || lower.includes('pompa') || lower.includes('lampu') || lower.includes('kipas')) {
+                return 'Panel Relay siap dikendalikan melalui menu Relay atau dashboard admin. Status default berada di Standby agar aman sebelum data live masuk.';
+            }
+            if (lower.includes('hai') || lower.includes('halo') || lower.includes('selamat')) {
+                return 'Halo! Saya Asisten AI Greenhouse Anda. Silakan tanya lewat suara atau ketik mengenai pH, nutrisi, suhu air, cuaca, maupun kontrol relay.';
+            }
+            return 'Saya menerima pertanyaan Anda: "' + text + '". Data saat ini: ' + t.sensorsSummary + ' dengan suhu air ' + t.waterTemp + '.';
+        }
+
+        function createSpeakButtonSVG() {
+            return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>' +
+                '<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>' +
+                '</svg><span>Dengarkan</span>';
+        }
+
+        function appendBotMessage(replyText, shouldAutoSpeak) {
+            if (!aiMessages) return;
+            var botMsg = document.createElement('div');
+            botMsg.className = 'ai-msg-bot';
+
+            var head = document.createElement('div');
+            head.className = 'ai-msg-bot-head';
+
+            var badge = document.createElement('div');
+            badge.className = 'ai-badge-label';
+            badge.textContent = 'AI';
+
+            var speakBtn = document.createElement('button');
+            speakBtn.type = 'button';
+            speakBtn.className = 'ai-msg-speak-btn';
+            speakBtn.title = 'Bacakan jawaban AI (Text-to-Speech)';
+            speakBtn.innerHTML = createSpeakButtonSVG();
+            speakBtn.addEventListener('click', function () {
+                speakText(replyText, speakBtn);
+            });
+
+            head.appendChild(badge);
+            head.appendChild(speakBtn);
+
+            var msgText = document.createElement('div');
+            msgText.className = 'ai-msg-text';
+            msgText.textContent = replyText;
+
+            botMsg.appendChild(head);
+            botMsg.appendChild(msgText);
+            aiMessages.appendChild(botMsg);
+            aiMessages.scrollTop = aiMessages.scrollHeight;
+
+            if (shouldAutoSpeak) {
+                speakText(replyText, speakBtn);
+            }
+        }
+
+        var AI_PROVIDERS = {
+            gemini: {
+                label: 'Gemini',
+                type: 'gemini',
+                models: ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+            },
+            groq: {
+                label: 'Groq',
+                type: 'openai',
+                url: 'https://api.groq.com/openai/v1/chat/completions',
+                modelsUrl: 'https://api.groq.com/openai/v1/models',
+                models: [
+                    'llama-3.1-8b-instant',
+                    'meta-llama/llama-4-scout-17b-16e-instruct',
+                    'qwen/qwen3-32b',
+                    'qwen-qwq-32b',
+                    'gemma2-9b-it',
+                    'llama3-8b-8192',
+                    'llama-3.3-70b-versatile'
+                ]
+            },
+            qwen: {
+                label: 'Qwen',
+                type: 'openai',
+                url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
+                modelsUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/models',
+                models: ['qwen-plus', 'qwen-turbo', 'qwen-max', 'qwen2.5-72b-instruct']
+            },
+            openai: {
+                label: 'OpenAI',
+                type: 'openai',
+                url: 'https://api.openai.com/v1/chat/completions',
+                modelsUrl: 'https://api.openai.com/v1/models',
+                models: ['gpt-4o-mini', 'gpt-4.1-mini', 'gpt-3.5-turbo']
+            },
+            deepseek: {
+                label: 'DeepSeek',
+                type: 'openai',
+                url: 'https://api.deepseek.com/chat/completions',
+                modelsUrl: 'https://api.deepseek.com/models',
+                models: ['deepseek-chat', 'deepseek-reasoner']
+            },
+            openrouter: {
+                label: 'OpenRouter',
+                type: 'openai',
+                url: 'https://openrouter.ai/api/v1/chat/completions',
+                modelsUrl: 'https://openrouter.ai/api/v1/models',
+                models: ['openai/gpt-4o-mini', 'google/gemini-2.0-flash-001', 'meta-llama/llama-3.1-8b-instruct:free']
+            }
+        };
+
+        var workingModelCache = {};
+
+        function cleanAiReplyText(raw) {
+            var text = String(raw || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            if (/^<think>/i.test(text)) {
+                var splitIdx = text.lastIndexOf('\n\n');
+                text = splitIdx !== -1 ? text.slice(splitIdx + 2).trim() : '';
+            }
+            return text;
+        }
+
+        function getSavedAiConfig() {
+            try {
+                var saved = JSON.parse(localStorage.getItem('tefa_dashboard_settings') || '{}');
+                var provider = saved.aiProvider && AI_PROVIDERS[saved.aiProvider] ? saved.aiProvider : 'gemini';
+                var apiKey = typeof saved.apiKey === 'string' ? saved.apiKey.replace(/^["']|["']$/g, '').trim() : '';
+                var preferQwenOnGroq = false;
+                if (apiKey.indexOf('AIza') === 0) {
+                    provider = 'gemini';
+                } else if (apiKey.indexOf('gsk_') === 0) {
+                    if (provider === 'qwen') preferQwenOnGroq = true;
+                    provider = 'groq';
+                } else if (apiKey.indexOf('sk-or-') === 0) {
+                    provider = 'openrouter';
+                }
+                return {
+                    provider: provider,
+                    apiKey: apiKey,
+                    preferQwenOnGroq: preferQwenOnGroq
+                };
+            } catch (e) {
+                return { provider: 'gemini', apiKey: '', preferQwenOnGroq: false };
+            }
+        }
+
+        function isAuthOrQuotaError(status, msg) {
+            return status === 401 || status === 403 || status === 429 ||
+                /invalid.*api.?key|incorrect.*api.?key|unauthorized|authentication|quota|billing|rate.?limit/i.test(msg || '');
+        }
+
+        function isModelUnavailableError(status, msg) {
+            if (isAuthOrQuotaError(status, msg)) return false;
+            return status === 404 ||
+                /does not exist|not have access|model_not_found|decommissioned|not found|invalid_model|not supported|deprecated/i.test(msg || '');
+        }
+
+        function discoverChatModels(providerKey, spec, apiKey, preferQwen) {
+            if (spec.type === 'gemini') {
+                var listUrl = 'https://generativelanguage.googleapis.com/v1beta/models?key=' + encodeURIComponent(apiKey);
+                return fetch(listUrl).then(function (res) {
+                    if (!res.ok) return [];
+                    return res.json();
+                }).then(function (data) {
+                    var items = (data && data.models) || [];
+                    var found = [];
+                    for (var i = 0; i < items.length; i++) {
+                        var m = items[i];
+                        var methods = m.supportedGenerationMethods || [];
+                        if (methods.indexOf('generateContent') === -1) continue;
+                        var id = String(m.name || '').replace(/^models\//, '');
+                        if (!id || /embedding|aqa|imagen|tts|robotics/i.test(id)) continue;
+                        found.push(id);
+                    }
+                    found.sort(function (a, b) {
+                        var score = function (s) {
+                            if (/2\.0-flash|2\.5-flash/.test(s)) return 0;
+                            if (/flash/.test(s)) return 1;
+                            return 2;
+                        };
+                        return score(a) - score(b);
+                    });
+                    return found;
+                }).catch(function () { return []; });
+            }
+
+            if (!spec.modelsUrl) return Promise.resolve([]);
+            return fetch(spec.modelsUrl, {
+                method: 'GET',
+                headers: { 'Authorization': 'Bearer ' + apiKey }
+            }).then(function (res) {
+                if (!res.ok) return [];
+                return res.json();
+            }).then(function (data) {
+                var items = (data && data.data) || [];
+                var found = [];
+                for (var i = 0; i < items.length; i++) {
+                    var id = items[i] && items[i].id;
+                    if (!id) continue;
+                    if (/whisper|tts|guard|embed|rerank|playai|orpheus|dall-e|sora|realtime|transcribe|audio|moderation|imagen|veo/i.test(id)) continue;
+                    found.push(id);
+                }
+                if (preferQwen) {
+                    found.sort(function (a, b) {
+                        var aq = /qwen/i.test(a) ? 0 : 1;
+                        var bq = /qwen/i.test(b) ? 0 : 1;
+                        return aq - bq;
+                    });
+                } else if (providerKey === 'groq') {
+                    var pref = spec.models || [];
+                    found.sort(function (a, b) {
+                        var ai = pref.indexOf(a);
+                        var bi = pref.indexOf(b);
+                        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+                    });
+                }
+                return found;
+            }).catch(function () { return []; });
+        }
+
+        function callSingleModel(spec, apiKey, modelId, systemPrompt, userText) {
+            if (spec.type === 'gemini') {
+                var geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(modelId) + ':generateContent?key=' + encodeURIComponent(apiKey);
+                return fetch(geminiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        systemInstruction: { parts: [{ text: systemPrompt }] },
+                        contents: [{ role: 'user', parts: [{ text: userText }] }]
+                    })
+                }).then(function (res) {
+                    return res.json().catch(function () { return {}; }).then(function (data) {
+                        var errMsg = (data && data.error && data.error.message) || ('HTTP ' + res.status);
+                        if (!res.ok) {
+                            var err = new Error(errMsg);
+                            err.status = res.status;
+                            throw err;
+                        }
+                        var reply = data && data.candidates && data.candidates[0] && data.candidates[0].content &&
+                            data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+                        var cleaned = cleanAiReplyText(reply);
+                        if (!cleaned) throw new Error('Respon Gemini kosong');
+                        return cleaned;
+                    });
+                });
+            }
+
+            return fetch(spec.url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + apiKey
+                },
+                body: JSON.stringify({
+                    model: modelId,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userText }
+                    ],
+                    temperature: 0.6,
+                    max_tokens: 650
+                })
+            }).then(function (res) {
+                return res.json().catch(function () { return {}; }).then(function (data) {
+                    var errMsg = (data && data.error && data.error.message) || ('HTTP ' + res.status);
+                    if (!res.ok) {
+                        var err = new Error(errMsg);
+                        err.status = res.status;
+                        throw err;
+                    }
+                    var reply = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+                    var cleaned = cleanAiReplyText(reply);
+                    if (!cleaned) throw new Error('Respon ' + spec.label + ' kosong');
+                    return cleaned;
+                });
+            });
+        }
+
+        function requestAiProviderReply(userText) {
+            var cfg = getSavedAiConfig();
+            var spec = AI_PROVIDERS[cfg.provider] || AI_PROVIDERS.gemini;
+            var t = readDashboardTelemetry();
+            var systemPrompt =
+                'Kamu adalah Asisten AI Greenhouse Hidroponik TeFa. Jawab ringkas, akurat, dan ramah dalam Bahasa Indonesia (maksimal 3 kalimat agar nyaman dibacakan suara). ' +
+                'Data sensor saat ini: ' + t.sensorsSummary + '. Suhu air: ' + t.waterTemp + '. Suhu udara: ' + t.weatherTemp + ' (' + t.weatherDesc + ').';
+
+            var cacheKey = cfg.provider + ':' + (cfg.preferQwenOnGroq ? 'q:' : '') + cfg.apiKey.slice(0, 14);
+            var initialQueue = [];
+            if (workingModelCache[cacheKey]) initialQueue.push(workingModelCache[cacheKey]);
+            var defaults = spec.models.slice();
+            if (cfg.preferQwenOnGroq) {
+                defaults.sort(function (a, b) {
+                    return (/qwen/i.test(a) ? 0 : 1) - (/qwen/i.test(b) ? 0 : 1);
+                });
+            }
+            for (var i = 0; i < defaults.length; i++) {
+                if (initialQueue.indexOf(defaults[i]) === -1) initialQueue.push(defaults[i]);
+            }
+
+            var tried = {};
+            var discovered = false;
+
+            function tryNext(queue) {
+                if (!queue.length) {
+                    return Promise.reject(new Error('Tidak ada model aktif yang tersedia untuk API key ini'));
+                }
+                var modelId = queue.shift();
+                if (tried[modelId]) return tryNext(queue);
+                tried[modelId] = true;
+
+                return callSingleModel(spec, cfg.apiKey, modelId, systemPrompt, userText).then(function (reply) {
+                    workingModelCache[cacheKey] = modelId;
+                    return reply;
+                }).catch(function (err) {
+                    var msg = err && err.message ? err.message : '';
+                    var status = err && err.status ? err.status : 0;
+                    if (!isModelUnavailableError(status, msg)) {
+                        throw err;
+                    }
+                    if (discovered) {
+                        return queue.length ? tryNext(queue) : Promise.reject(err);
+                    }
+                    discovered = true;
+                    return discoverChatModels(cfg.provider, spec, cfg.apiKey, cfg.preferQwenOnGroq).then(function (liveModels) {
+                        if (!liveModels.length && !queue.length) throw err;
+                        var merged = [];
+                        for (var m = 0; m < liveModels.length; m++) {
+                            if (!tried[liveModels[m]] && merged.indexOf(liveModels[m]) === -1) merged.push(liveModels[m]);
+                        }
+                        for (var q = 0; q < queue.length; q++) {
+                            if (!tried[queue[q]] && merged.indexOf(queue[q]) === -1) merged.push(queue[q]);
+                        }
+                        if (!merged.length) throw err;
+                        return tryNext(merged);
+                    });
+                });
+            }
+
+            return tryNext(initialQueue);
+        }
+
+        function sendMessage(customText, options) {
+            if (!aiInput || !aiMessages) return;
+            var opts = options || {};
+            var text = (typeof customText === 'string' ? customText : aiInput.value).trim();
+            if (!text) return;
+
+            var userMsg = document.createElement('div');
+            userMsg.className = 'ai-msg-user';
+            userMsg.textContent = text;
+            aiMessages.appendChild(userMsg);
+
+            if (typeof customText !== 'string') {
+                aiInput.value = '';
+            }
+            aiMessages.scrollTop = aiMessages.scrollHeight;
+
+            var shouldSpeak = Boolean(opts.fromVoice || ttsEnabled);
+            var cfg = getSavedAiConfig();
+            if (!cfg.apiKey) {
+                setTimeout(function () {
+                    var replyText = generateAiReply(text);
+                    if (voicePanel && voicePanel.classList.contains('open')) {
+                        setOrbTranscript(replyText, true);
+                    }
+                    appendBotMessage(replyText, shouldSpeak);
+                }, 350);
+                return;
+            }
+
+            var spec = AI_PROVIDERS[cfg.provider] || AI_PROVIDERS.gemini;
+            if (voicePanel && voicePanel.classList.contains('open')) {
+                setOrbStatus('Menghubungkan ke ' + spec.label + '...', '');
+            }
+
+            var pendingBubble = document.createElement('div');
+            pendingBubble.className = 'ai-msg-bot';
+            pendingBubble.innerHTML = '<div class="ai-msg-bot-head"><div class="ai-badge-label">AI · ' + spec.label + '</div></div><div class="ai-msg-text">Sedang memproses...</div>';
+            aiMessages.appendChild(pendingBubble);
+            aiMessages.scrollTop = aiMessages.scrollHeight;
+
+            requestAiProviderReply(text).then(function (replyText) {
+                if (pendingBubble.parentNode) pendingBubble.parentNode.removeChild(pendingBubble);
+                if (voicePanel && voicePanel.classList.contains('open')) {
+                    setOrbTranscript(replyText, true);
+                    if (!shouldSpeak) setOrbStatus('Ketuk Orb untuk Bicara', '');
+                }
+                appendBotMessage(replyText, shouldSpeak);
+            }).catch(function (err) {
+                if (pendingBubble.parentNode) pendingBubble.parentNode.removeChild(pendingBubble);
+                var fallback = 'Gagal terhubung ke ' + spec.label + ' (' + (err && err.message ? err.message : 'Error') + '). ' + generateAiReply(text);
+                if (voicePanel && voicePanel.classList.contains('open')) {
+                    setOrbTranscript(fallback, true);
+                    if (!shouldSpeak) setOrbStatus('Ketuk Orb untuk Bicara', '');
+                }
+                appendBotMessage(fallback, shouldSpeak);
+            });
+        }
+
+        function stopListening() {
+            isListening = false;
+            updateMicButtonsUI(false);
+            stopMicAnalyser();
+            if (recognition) {
+                try {
+                    recognition.stop();
+                } catch (err) {
+                    // ignore already-stopped recognition errors
+                }
+            }
+            if (!isSpeaking) {
+                orbMode = 'idle';
+                setOrbStatus('Ketuk Orb untuk Bicara', '');
+            }
+        }
+
+        function startListening() {
+            var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRec) {
+                openVoiceOrb();
+                setOrbStatus('Mikrofon Tidak Didukung', '');
+                setOrbTranscript('Browser ini belum mendukung Speech-to-Text (gunakan Chrome atau Edge terbaru via HTTPS/localhost).', false);
+                return;
+            }
+
+            if (isListening) {
+                stopListening();
+                return;
+            }
+
+            stopSpeaking();
+            openVoiceOrb();
+
+            recognition = new SpeechRec();
+            recognition.lang = 'id-ID';
+            recognition.interimResults = true;
+            recognition.continuous = false;
+            latestTranscript = '';
+
+            recognition.onstart = function () {
+                isListening = true;
+                orbMode = 'listening';
+                updateMicButtonsUI(true);
+                setOrbStatus('Mendengarkan...', 'is-listening');
+                setOrbTranscript('Silakan bicara sekarang...', false);
+                startMicAnalyser();
+            };
+
+            recognition.onresult = function (event) {
+                var interim = '';
+                var finalStr = '';
+                for (var i = event.resultIndex; i < event.results.length; i++) {
+                    var transcriptPart = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalStr += transcriptPart;
+                    } else {
+                        interim += transcriptPart;
+                    }
+                }
+
+                var combined = (finalStr || interim).trim();
+                if (combined) {
+                    latestTranscript = combined;
+                    speechPulse = 1.0;
+                    setOrbTranscript(combined, true);
+                }
+
+                if (finalStr && finalStr.trim()) {
+                    var question = finalStr.trim();
+                    latestTranscript = '';
+                    isListening = false;
+                    updateMicButtonsUI(false);
+                    stopMicAnalyser();
+                    setOrbStatus('Memproses jawaban...', '');
+                    sendMessage(question, { fromVoice: true });
+                }
+            };
+
+            recognition.onerror = function (event) {
+                isListening = false;
+                updateMicButtonsUI(false);
+                stopMicAnalyser();
+                if (!isSpeaking) orbMode = 'idle';
+                if (event && event.error === 'not-allowed') {
+                    setOrbStatus('Izin Mikrofon Ditolak', '');
+                    setOrbTranscript('Izinkan akses mikrofon di browser agar dapat bertanya lewat suara.', false);
+                } else if (event && event.error === 'no-speech') {
+                    setOrbStatus('Ketuk Orb untuk Bicara', '');
+                    setOrbTranscript('Tidak ada suara terdeteksi. Ketuk orb dan coba bicara lagi.', false);
+                } else {
+                    setOrbStatus('Ketuk Orb untuk Bicara', '');
+                }
+            };
+
+            recognition.onend = function () {
+                var pending = latestTranscript.trim();
+                isListening = false;
+                updateMicButtonsUI(false);
+                stopMicAnalyser();
+                if (pending) {
+                    latestTranscript = '';
+                    setOrbStatus('Memproses jawaban...', '');
+                    sendMessage(pending, { fromVoice: true });
+                } else if (!isSpeaking) {
+                    orbMode = 'idle';
+                    setOrbStatus('Ketuk Orb untuk Bicara', '');
+                }
+            };
+
+            try {
+                recognition.start();
+            } catch (err) {
+                isListening = false;
+                updateMicButtonsUI(false);
+                stopMicAnalyser();
+                setOrbStatus('Ketuk Orb untuk Bicara', '');
+            }
+        }
 
         function openPopup() {
             // Tutup modal lain agar tidak saling menumpuk
@@ -597,17 +1867,25 @@
 
         function closePopup() {
             if (!aiPopup.classList.contains('open') || aiPopup.classList.contains('closing')) return;
+            stopListening();
+            stopSpeaking();
             aiPopup.classList.add('closing');
             setTimeout(function () {
                 aiPopup.classList.remove('open');
                 aiPopup.classList.remove('closing');
-                aiBtn.classList.remove('hidden');
+                if (!voicePanel || !voicePanel.classList.contains('open')) {
+                    aiBtn.classList.remove('hidden');
+                }
             }, 320);
         }
 
+        updateTtsToggleUI();
+
         aiBtn.addEventListener('click', function (e) {
             e.stopPropagation();
-            if (aiPopup.classList.contains('open') && !aiPopup.classList.contains('closing')) {
+            if (voicePanel && voicePanel.classList.contains('open')) {
+                closeVoiceOrb(false);
+            } else if (aiPopup.classList.contains('open') && !aiPopup.classList.contains('closing')) {
                 closePopup();
             } else {
                 openPopup();
@@ -625,68 +1903,151 @@
             e.stopPropagation();
         });
 
+        if (voicePanel) {
+            voicePanel.addEventListener('click', function (e) {
+                e.stopPropagation();
+            });
+        }
+
+        attachPanelDrag(orbTrigger, true);
+        attachPanelDrag(orbTopbar, false);
+
+        if (orbResizeHandle && voicePanel) {
+            orbResizeHandle.addEventListener('click', function (e) {
+                e.stopPropagation();
+            });
+            orbResizeHandle.addEventListener('pointerdown', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var startX = e.clientX;
+                var startY = e.clientY;
+                var startSize = orbCanvas ? orbCanvas.getBoundingClientRect().width : currentOrbSize;
+                voicePanel.classList.add('is-resizing');
+
+                function onResizeMove(ev) {
+                    var delta = ((ev.clientX - startX) + (ev.clientY - startY)) * 0.85;
+                    setOrbSize(startSize + delta);
+                }
+
+                function onResizeUp() {
+                    window.removeEventListener('pointermove', onResizeMove);
+                    window.removeEventListener('pointerup', onResizeUp);
+                    window.removeEventListener('pointercancel', onResizeUp);
+                    voicePanel.classList.remove('is-resizing');
+                }
+
+                window.addEventListener('pointermove', onResizeMove);
+                window.addEventListener('pointerup', onResizeUp);
+                window.addEventListener('pointercancel', onResizeUp);
+            });
+        }
+
+        if (orbSizeDownBtn) {
+            orbSizeDownBtn.addEventListener('click', function () {
+                setOrbSize(currentOrbSize - 30);
+            });
+        }
+
+        if (orbSizeUpBtn) {
+            orbSizeUpBtn.addEventListener('click', function () {
+                setOrbSize(currentOrbSize + 30);
+            });
+        }
+
+        window.addEventListener('resize', function () {
+            if (voicePanel && voicePanel.classList.contains('open')) {
+                setOrbSize(currentOrbSize);
+            }
+        });
+
         document.addEventListener('click', function (e) {
-            if (aiPopup.classList.contains('open') && !aiPopup.contains(e.target) && !aiBtn.contains(e.target)) {
+            if (aiPopup.classList.contains('open') && !aiPopup.contains(e.target) && !aiBtn.contains(e.target) && (!voicePanel || !voicePanel.contains(e.target))) {
                 closePopup();
             }
         });
 
         document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape' && aiPopup.classList.contains('open')) {
-                closePopup();
+            if (e.key === 'Escape') {
+                if (voicePanel && voicePanel.classList.contains('open')) {
+                    closeVoiceOrb(false);
+                } else if (aiPopup.classList.contains('open')) {
+                    closePopup();
+                }
             }
         });
 
         if (aiClear && aiMessages) {
             aiClear.addEventListener('click', function () {
+                stopSpeaking();
+                stopListening();
                 aiMessages.innerHTML = '';
+                setOrbTranscript(DEFAULT_ORB_HINT, false);
             });
         }
 
-        function sendMessage() {
-            if (!aiInput || !aiMessages) return;
-            var text = aiInput.value.trim();
-            if (!text) return;
+        if (aiBtnTtsToggle) {
+            aiBtnTtsToggle.addEventListener('click', function () {
+                ttsEnabled = !ttsEnabled;
+                if (!ttsEnabled) stopSpeaking();
+                updateTtsToggleUI();
+            });
+        }
 
-            var userMsg = document.createElement('div');
-            userMsg.className = 'ai-msg-user';
-            userMsg.textContent = text;
-            aiMessages.appendChild(userMsg);
-
-            aiInput.value = '';
-            aiMessages.scrollTop = aiMessages.scrollHeight;
-
-            setTimeout(function () {
-                var botMsg = document.createElement('div');
-                botMsg.className = 'ai-msg-bot';
-
-                var badge = document.createElement('div');
-                badge.className = 'ai-badge-label';
-                badge.textContent = 'AI';
-
-                var msgText = document.createElement('div');
-                msgText.className = 'ai-msg-text';
-
-                var lower = text.toLowerCase();
-                if (lower.includes('status') || lower.includes('sensor')) {
-                    msgText.textContent = 'Status sistem: Seluruh sensor saat ini dalam status Terputus (N/A). Pastikan mikrokontroler terhubung.';
-                } else if (lower.includes('relay') || lower.includes('pompa')) {
-                    msgText.textContent = 'Relay kontroler berada dalam mode Standby (Default Mati). Anda dapat mengaktifkannya melalui panel Relay.';
-                } else if (lower.includes('hai') || lower.includes('halo')) {
-                    msgText.textContent = 'HAI JUGA! Ada yang bisa saya bantu terkait monitoring greenhouse hidroponik?';
+        if (aiBtnVoiceOrb) {
+            aiBtnVoiceOrb.addEventListener('click', function () {
+                if (voicePanel && voicePanel.classList.contains('open')) {
+                    closeVoiceOrb(false);
                 } else {
-                    msgText.textContent = 'Sistem mencatat input: "' + text + '". Sensor saat ini N/A, telemetri otomatis akan aktif saat data live diterima.';
+                    openVoiceOrb();
                 }
+            });
+        }
 
-                botMsg.appendChild(badge);
-                botMsg.appendChild(msgText);
-                aiMessages.appendChild(botMsg);
-                aiMessages.scrollTop = aiMessages.scrollHeight;
-            }, 450);
+        if (orbBackBtn) {
+            orbBackBtn.addEventListener('click', function () {
+                closeVoiceOrb(true);
+            });
+        }
+
+        if (orbCloseBtn) {
+            orbCloseBtn.addEventListener('click', function () {
+                closeVoiceOrb(false);
+            });
+        }
+
+        if (orbMicBtn) {
+            orbMicBtn.addEventListener('click', startListening);
+        }
+
+        if (orbTrigger) {
+            orbTrigger.addEventListener('click', function (e) {
+                if (orbResizeHandle && (e.target === orbResizeHandle || orbResizeHandle.contains(e.target))) return;
+                if (suppressOrbClick) {
+                    suppressOrbClick = false;
+                    return;
+                }
+                startListening();
+            });
+            orbTrigger.addEventListener('wheel', function (e) {
+                e.preventDefault();
+                setOrbSize(currentOrbSize + (e.deltaY < 0 ? 22 : -22));
+            }, { passive: false });
+            orbTrigger.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    startListening();
+                }
+            });
+        }
+
+        if (aiBtnMic) {
+            aiBtnMic.addEventListener('click', startListening);
         }
 
         if (aiSend) {
-            aiSend.addEventListener('click', sendMessage);
+            aiSend.addEventListener('click', function () {
+                sendMessage();
+            });
         }
 
         if (aiInput) {
@@ -720,16 +2081,25 @@
     }
 
     // ============================================================
-    // SHARED PAGINATION BUTTON BUILDER (Max 5 pages + ellipsis)
+    // SHARED PAGINATION BUTTON BUILDER (Responsive pages + ellipsis)
     // ============================================================
+    function getPaginationMaxVisible() {
+        return window.innerWidth <= 380 ? 1 : (window.innerWidth <= 600 ? 3 : 5);
+    }
+
     function renderTablePaginationButtons(btnsContainer, currentPage, totalPages, onPageSelect) {
         if (!btnsContainer) return;
+        btnsContainer._paginationState = {
+            currentPage: currentPage,
+            totalPages: totalPages,
+            onPageSelect: onPageSelect
+        };
         btnsContainer.innerHTML = '';
 
-        function createPageBtn(page) {
+        function createPageBtn(page, extraClass) {
             var btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'table-pagination-btn' + (page === currentPage ? ' active' : '');
+            btn.className = 'table-pagination-btn' + (page === currentPage ? ' active' : '') + (extraClass || '');
             btn.textContent = page;
             btn.addEventListener('click', function () {
                 onPageSelect(page);
@@ -755,8 +2125,9 @@
         });
         btnsContainer.appendChild(prevBtn);
 
-        var maxVisible = 5;
-        var startPage = Math.max(1, currentPage - 2);
+        var maxVisible = getPaginationMaxVisible();
+        var half = Math.floor(maxVisible / 2);
+        var startPage = Math.max(1, currentPage - half);
         var endPage = Math.min(totalPages, startPage + maxVisible - 1);
         if (endPage - startPage < maxVisible - 1) {
             startPage = Math.max(1, endPage - maxVisible + 1);
@@ -768,7 +2139,8 @@
         }
 
         for (var p = startPage; p <= endPage; p++) {
-            btnsContainer.appendChild(createPageBtn(p));
+            var isFar = Math.abs(p - currentPage) > 1 && p !== 1 && p !== totalPages;
+            btnsContainer.appendChild(createPageBtn(p, isFar ? ' page-btn-far' : ''));
         }
 
         if (endPage < totalPages) {
@@ -786,6 +2158,23 @@
             if (currentPage < totalPages) onPageSelect(currentPage + 1);
         });
         btnsContainer.appendChild(nextBtn);
+
+        if (!window._tefaPaginationResizeBound) {
+            window._tefaPaginationResizeBound = true;
+            window._tefaPaginationMaxVisible = maxVisible;
+            window.addEventListener('resize', function () {
+                var nextMax = getPaginationMaxVisible();
+                if (nextMax === window._tefaPaginationMaxVisible) return;
+                window._tefaPaginationMaxVisible = nextMax;
+                ['sensorPaginationBtns', 'awsPaginationBtns'].forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (el && el._paginationState && el.childNodes.length > 0) {
+                        var st = el._paginationState;
+                        renderTablePaginationButtons(el, st.currentPage, st.totalPages, st.onPageSelect);
+                    }
+                });
+            });
+        }
     }
 
     // ============================================================
@@ -1277,41 +2666,136 @@
     });
 
     // Smooth scroll on link click
-    mobileNavLinks.forEach(function(link) {
-        link.addEventListener('click', function(e) {
+    mobileNavLinks.forEach(function (link) {
+        link.addEventListener('click', function (e) {
             var targetId = this.getAttribute('href');
             if (targetId && targetId.startsWith('#')) {
                 e.preventDefault();
                 var secId = targetId.substring(1);
                 var targetEl = document.getElementById(secId);
 
-                mobileNavLinks.forEach(function(l) { l.classList.remove('active'); });
-                this.classList.add('active');
-
-                navLinks.forEach(function(dl) {
-                    if (dl.getAttribute('href') === targetId) {
-                        navLinks.forEach(function(l) { l.classList.remove('active'); });
-                        dl.classList.add('active');
-                        moveNavIndicator(dl);
-                    }
-                });
-
                 closeDropdown();
 
                 if (targetEl) {
-                    var topRow = document.querySelector('.top-row');
-                    var navHeight = topRow ? topRow.offsetHeight + 16 : 76;
+                    if (window.setNavClicking) {
+                        window.setNavClicking(true);
+                    }
+                    if (window.syncActiveSection) {
+                        window.syncActiveSection(secId, true);
+                    }
+
+                    var navBar = document.querySelector('.top-row .nav');
+                    var navHeight = (navBar ? navBar.offsetHeight : 54) + 20;
                     var elementPosition = targetEl.getBoundingClientRect().top;
                     var offsetPosition = elementPosition + window.pageYOffset - navHeight;
 
-                    setTimeout(function() {
+                    setTimeout(function () {
                         window.scrollTo({
                             top: Math.max(0, offsetPosition),
                             behavior: 'smooth'
                         });
                     }, 100);
+
+                    setTimeout(function () {
+                        if (window.setNavClicking) {
+                            window.setNavClicking(false);
+                        }
+                    }, 900);
                 }
             }
         });
     });
+})();
+
+/* ================= PARALLAX CURSOR EFFECT ================= */
+(function () {
+    function initParallaxCursorEffect() {
+        if (!window.matchMedia || !window.matchMedia('(pointer: fine)').matches) return;
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        if (document.body.dataset.parallaxInit === '1') return;
+        document.body.dataset.parallaxInit = '1';
+
+        function attachCardParallax(el, options) {
+            const maxTilt = options.maxTilt || 0;
+            const hoverLift = options.hoverLift || 0;
+            const baseTransition = options.baseTransition || 'box-shadow .25s ease, transform .38s cubic-bezier(0.22, 1, 0.36, 1)';
+            el.classList.add('parallax-card');
+
+            el.addEventListener('mousemove', function (e) {
+                const rect = el.getBoundingClientRect();
+                if (!rect.width || !rect.height) return;
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                el.style.setProperty('--mx', `${x.toFixed(1)}px`);
+                el.style.setProperty('--my', `${y.toFixed(1)}px`);
+                el.classList.add('is-tilting');
+
+                if (maxTilt > 0) {
+                    const rx = ((y - rect.height / 2) / (rect.height / 2)) * -maxTilt;
+                    const ry = ((x - rect.width / 2) / (rect.width / 2)) * maxTilt;
+                    el.style.transition = 'box-shadow .25s ease, transform .08s ease-out';
+                    el.style.transform = `perspective(1000px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) translateY(${hoverLift}px)`;
+                }
+            }, { passive: true });
+
+            el.addEventListener('mouseleave', function () {
+                el.classList.remove('is-tilting');
+                if (maxTilt > 0) {
+                    el.style.transition = baseTransition;
+                    el.style.transform = '';
+                    setTimeout(function () {
+                        if (!el.classList.contains('is-tilting')) {
+                            el.style.transition = '';
+                        }
+                    }, 380);
+                }
+            });
+        }
+
+        document.querySelectorAll('.hero, .weather, .row3 > .card, .awsbar').forEach(function (el) {
+            attachCardParallax(el, { maxTilt: 2.2, hoverLift: -2 });
+        });
+
+        document.querySelectorAll('.sensor, .hwc, .awsc').forEach(function (el) {
+            attachCardParallax(el, { maxTilt: 3.8, hoverLift: -2 });
+        });
+
+        document.querySelectorAll('.relay-card').forEach(function (el) {
+            attachCardParallax(el, { maxTilt: 3.8, hoverLift: -2 });
+        });
+
+        document.querySelectorAll('.card.chart, .card.tcard').forEach(function (el) {
+            attachCardParallax(el, { maxTilt: 0 });
+        });
+
+        document.querySelectorAll('.notif-btn, .ai-assistant-btn, .gear').forEach(function (btn) {
+            const icon = btn.querySelector('svg');
+            btn.addEventListener('mousemove', function (e) {
+                const rect = btn.getBoundingClientRect();
+                const dx = e.clientX - (rect.left + rect.width / 2);
+                const dy = e.clientY - (rect.top + rect.height / 2);
+                btn.style.transition = 'transform .1s ease-out, box-shadow .22s ease, background .22s ease';
+                btn.style.transform = `translate3d(${(dx * 0.22).toFixed(2)}px, ${(dy * 0.22).toFixed(2)}px, 0)`;
+                if (icon) {
+                    icon.style.transition = 'transform .1s ease-out';
+                    icon.style.transform = `translate3d(${(dx * 0.12).toFixed(2)}px, ${(dy * 0.12).toFixed(2)}px, 0)`;
+                }
+            }, { passive: true });
+
+            btn.addEventListener('mouseleave', function () {
+                btn.style.transition = 'transform .35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow .22s ease, background .22s ease';
+                btn.style.transform = '';
+                if (icon) {
+                    icon.style.transition = 'transform .35s cubic-bezier(0.22, 1, 0.36, 1)';
+                    icon.style.transform = '';
+                }
+            });
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initParallaxCursorEffect);
+    } else {
+        initParallaxCursorEffect();
+    }
 })();

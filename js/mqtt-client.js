@@ -2,17 +2,27 @@
     // Konfigurasi MQTT Broker (EMQX Public Broker - Test Sementara)
     // Catatan: Browser menggunakan WebSocket (wss:// port 8084) untuk terhubung ke broker yang sama
     // dengan port TCP 1883 pada ESP32 menggunakan protokol MQTT v3.1.1 (protocolVersion: 4).
-    var MQTT_CONFIG = {
+    var DEFAULT_MQTT_CONFIG = {
         brokerUrl: 'wss://broker.emqx.io:8084/mqtt',
         topic: 'tefa/hidroponik/sensor',
+        publishTopic: 'tefa/hidroponik/control',
+        statusTopic: 'tefa/hidroponik/status',
         topics: [
             'tefa/hidroponik/sensor',
+            'tefa/hidroponik/status',
             'tefa/smkn2yogyakarta/data',
             'tefa/sensor',
             'tefa/data',
             'tefa/#'
-        ],
-        publishTopic: 'tefa/hidroponik/aktuator',
+        ]
+    };
+
+    var MQTT_CONFIG = {
+        brokerUrl: DEFAULT_MQTT_CONFIG.brokerUrl,
+        topic: DEFAULT_MQTT_CONFIG.topic,
+        publishTopic: DEFAULT_MQTT_CONFIG.publishTopic,
+        statusTopic: DEFAULT_MQTT_CONFIG.statusTopic,
+        topics: DEFAULT_MQTT_CONFIG.topics,
         options: {
             clientId: 'tefa_web_' + Math.random().toString(16).slice(2, 10),
             protocolId: 'MQTT',
@@ -23,9 +33,69 @@
         }
     };
 
+    function isLocalHost(host) {
+        var h = (host || '').split(':')[0].toLowerCase();
+        if (h === 'localhost' || h === '127.0.0.1') return true;
+        if (/^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(h)) return true;
+        return false;
+    }
+
+    function normalizeBrokerUrl(input) {
+        if (!input || typeof input !== 'string') return DEFAULT_MQTT_CONFIG.brokerUrl;
+        var raw = input.trim();
+        if (!raw) return DEFAULT_MQTT_CONFIG.brokerUrl;
+
+        if (/^wss?:\/\//i.test(raw)) {
+            var m = raw.match(/^(wss?:\/\/)([^\/]+)(\/.*)?$/i);
+            if (m) {
+                var hostPart = m[2];
+                var pathPart = m[3] || '';
+                if (!pathPart && /emqx|hivemq/i.test(hostPart)) {
+                    pathPart = '/mqtt';
+                }
+                return m[1].toLowerCase() + hostPart + pathPart;
+            }
+            return raw;
+        }
+
+        raw = raw.replace(/^(mqtt|tcp):\/\//i, '');
+        var slashIdx = raw.indexOf('/');
+        var hostPort = slashIdx === -1 ? raw : raw.slice(0, slashIdx);
+        var pathStr = slashIdx === -1 ? '/mqtt' : (raw.slice(slashIdx) || '/mqtt');
+
+        if (hostPort.indexOf(':') === -1) {
+            hostPort += ':8084';
+        } else if (/:1883$/.test(hostPort)) {
+            hostPort = hostPort.replace(/:1883$/, ':8084');
+        }
+
+        var scheme = isLocalHost(hostPort) ? 'ws://' : 'wss://';
+        return scheme + hostPort + pathStr;
+    }
+
+    function loadSavedMqttConfig() {
+        try {
+            var saved = JSON.parse(localStorage.getItem('tefa_dashboard_settings') || '{}');
+            MQTT_CONFIG.brokerUrl = normalizeBrokerUrl(saved.mqttBroker || DEFAULT_MQTT_CONFIG.brokerUrl);
+            MQTT_CONFIG.topic = (saved.mqttTopicSub && saved.mqttTopicSub.trim()) || DEFAULT_MQTT_CONFIG.topic;
+            var savedPub = saved.mqttTopicPub && saved.mqttTopicPub.trim();
+            if (savedPub === 'tefa/hidroponik/aktuator') {
+                savedPub = DEFAULT_MQTT_CONFIG.publishTopic;
+            }
+            MQTT_CONFIG.publishTopic = savedPub || DEFAULT_MQTT_CONFIG.publishTopic;
+            MQTT_CONFIG.statusTopic = (saved.mqttTopicStatus && saved.mqttTopicStatus.trim()) || DEFAULT_MQTT_CONFIG.statusTopic;
+        } catch (e) {
+            MQTT_CONFIG.brokerUrl = DEFAULT_MQTT_CONFIG.brokerUrl;
+            MQTT_CONFIG.topic = DEFAULT_MQTT_CONFIG.topic;
+            MQTT_CONFIG.publishTopic = DEFAULT_MQTT_CONFIG.publishTopic;
+            MQTT_CONFIG.statusTopic = DEFAULT_MQTT_CONFIG.statusTopic;
+        }
+    }
+
     var STORAGE_KEY_LOG = 'tefa_telemetry_log_v1';
     var minWaterTemp = null;
     var maxWaterTemp = null;
+    var lastDeviceStatus = null;
     var telemetryHistory = []; // live short buffer for AWS bars
     var telemetryLog = loadTelemetryLog();
     var pendingSettingsPayload = null;
@@ -189,14 +259,14 @@
             '#telemetri .legend span { cursor: pointer; user-select: none; transition: opacity 0.2s ease; }',
             '#telemetri .legend span.dimmed { opacity: 0.35; text-decoration: line-through; }',
             '.chart-hover-layer { position: absolute; pointer-events: none; z-index: 5; overflow: visible; }',
-            '.chart-crosshair { position: absolute; top: 0; bottom: 0; width: 1.5px; background: repeating-linear-gradient(to bottom, rgba(27,94,32,0.45) 0 4px, transparent 4px 8px); opacity: 0; transition: left 0.08s ease-out, opacity 0.15s ease; }',
-            '.chart-dot { position: absolute; width: 11px; height: 11px; border-radius: 50%; border: 2.5px solid #fff; transform: translate(-50%, -50%); opacity: 0; transition: left 0.08s ease-out, top 0.08s ease-out, opacity 0.15s ease; box-shadow: 0 2px 6px rgba(0,0,0,0.22); }',
-            '.chart-tooltip { position: absolute; min-width: 185px; background: rgba(255,255,255,0.96); backdrop-filter: blur(8px); border: 1px solid #C8E6C9; border-radius: 12px; padding: 10px 13px; box-shadow: 0 10px 26px rgba(27,94,32,0.14); font-size: 12px; color: #1B3B1E; pointer-events: none; z-index: 10; opacity: 0; transition: left 0.08s ease-out, top 0.08s ease-out, opacity 0.15s ease; }',
-            '.chart-tooltip-time { font-weight: 700; font-size: 11px; color: #2E7D32; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid #E8F5E9; letter-spacing: 0.3px; }',
+            '.chart-crosshair { position: absolute; top: 0; bottom: 0; width: 1.5px; background: repeating-linear-gradient(to bottom, rgba(13,40,24,0.45) 0 4px, transparent 4px 8px); opacity: 0; transition: left 0.08s ease-out, opacity 0.15s ease; }',
+            '.chart-dot { position: absolute; width: 11px; height: 11px; border-radius: 50%; border: 2.5px solid #fff; transform: translate(-50%, -50%); opacity: 0; transition: left 0.08s ease-out, top 0.08s ease-out, opacity 0.15s ease; box-shadow: 0 2px 6px rgba(2,2,2,0.22); }',
+            '.chart-tooltip { position: absolute; min-width: 185px; background: rgba(255,255,255,0.96); backdrop-filter: blur(10px); border: none; border-radius: 12px; padding: 10px 13px; box-shadow: 0 16px 38px rgba(9,24,15,0.20), 0 4px 12px rgba(2,2,2,0.08); font-size: 12px; color: #0D2818; pointer-events: none; z-index: 10; opacity: 0; transition: left 0.08s ease-out, top 0.08s ease-out, opacity 0.15s ease; }',
+            '.chart-tooltip-time { font-weight: 700; font-size: 11px; color: #0D2818; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid #EBF0ED; letter-spacing: 0.3px; }',
             '.chart-tooltip-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 3px 0; font-weight: 500; }',
-            '.chart-tooltip-label { display: flex; align-items: center; gap: 6px; color: #4A664D; }',
+            '.chart-tooltip-label { display: flex; align-items: center; gap: 6px; color: #4A5D52; }',
             '.chart-tooltip-swatch { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }',
-            '.chart-tooltip-val { font-weight: 700; color: #1B3B1E; font-variant-numeric: tabular-nums; }'
+            '.chart-tooltip-val { font-weight: 700; color: #0D2818; font-variant-numeric: tabular-nums; }'
         ].join('\n');
         document.head.appendChild(style);
     }
@@ -283,9 +353,9 @@
             return p;
         }
 
-        var pathEc = makeLine('#1B5E20');
-        var pathPh = makeLine('#66BB6A');
-        var pathTemp = makeLine('#A5D6A7');
+        var pathEc = makeLine('#0D2818');
+        var pathPh = makeLine('#1B4332');
+        var pathTemp = makeLine('#6B9080');
 
         svg.appendChild(areaPath);
         svg.appendChild(pathTemp);
@@ -303,15 +373,15 @@
 
         var dotEc = document.createElement('div');
         dotEc.className = 'chart-dot';
-        dotEc.style.background = '#1B5E20';
+        dotEc.style.background = '#0D2818';
 
         var dotPh = document.createElement('div');
         dotPh.className = 'chart-dot';
-        dotPh.style.background = '#66BB6A';
+        dotPh.style.background = '#1B4332';
 
         var dotTemp = document.createElement('div');
         dotTemp.className = 'chart-dot';
-        dotTemp.style.background = '#A5D6A7';
+        dotTemp.style.background = '#6B9080';
 
         var tooltip = document.createElement('div');
         tooltip.className = 'chart-tooltip';
@@ -371,13 +441,13 @@
 
             var rowsHtml = ['<div class="chart-tooltip-time">' + pt.time + ' WIB</div>'];
             if (chartState.visibleSeries.ec) {
-                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#1B5E20"></i>EC / TDS</span><span class="chart-tooltip-val">' + (pt.ec || 0).toFixed(2) + ' mS/cm</span></div>');
+                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#0D2818"></i>EC / TDS</span><span class="chart-tooltip-val">' + (pt.ec || 0).toFixed(2) + ' mS/cm</span></div>');
             }
             if (chartState.visibleSeries.ph) {
-                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#66BB6A"></i>pH</span><span class="chart-tooltip-val">' + (pt.ph || 0).toFixed(2) + ' pH</span></div>');
+                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#1B4332"></i>pH</span><span class="chart-tooltip-val">' + (pt.ph || 0).toFixed(2) + ' pH</span></div>');
             }
             if (chartState.visibleSeries.temp) {
-                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#A5D6A7"></i>Water Temp</span><span class="chart-tooltip-val">' + (pt.waterTemp || 0).toFixed(1) + ' °C</span></div>');
+                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#6B9080"></i>Water Temp</span><span class="chart-tooltip-val">' + (pt.waterTemp || 0).toFixed(1) + ' °C</span></div>');
             }
             tooltip.innerHTML = rowsHtml.join('');
 
@@ -472,7 +542,7 @@
         if (weatherDesc) {
             if (isOnline) {
                 weatherDesc.textContent = 'Broker terhubung · ' + subText;
-                weatherDesc.style.color = '#2E7D32';
+                weatherDesc.style.color = '#1B4332';
             } else {
                 weatherDesc.textContent = subText;
                 weatherDesc.style.color = stateText === 'Connecting' ? '#E65100' : 'var(--red)';
@@ -730,7 +800,6 @@
         var overallStatus = (isPhWarn || isWaterWarn || isHumWarn) ? 'Warning' : 'Normal';
 
         // 1. Update Hero Uptime & Hardware Health
-        setConnectionUI('Online', 'Live Data (' + wibTime + ')', true);
         var uptimeEl = document.getElementById('uptime');
         if (uptimeEl) uptimeEl.textContent = wibTime + ' WIB';
 
@@ -775,17 +844,21 @@
                 if (s3) { s3.textContent = 'Aktif'; s3.classList.remove('off'); }
             }
 
-            // Relay 8CH / system_status
-            var v4 = hwItems[4].querySelector('.v');
-            var s4 = hwItems[4].querySelector('.s');
-            var sys = payload.system_status || null;
-            if (v4) {
-                v4.textContent = (sys && sys.pompa) ? ('Pompa ' + String(sys.pompa).toUpperCase()) : 'Standby';
-                v4.classList.remove('off');
-            }
-            if (s4) {
-                s4.textContent = (sys && sys.deepsleep_sec !== undefined) ? ('DeepSleep ' + sys.deepsleep_sec + 's') : 'Terhubung';
-                s4.classList.remove('off');
+            // Relay 8CH / Device Status
+            if (lastDeviceStatus) {
+                renderHeroRelayStatus(lastDeviceStatus);
+            } else {
+                var v4 = hwItems[4].querySelector('.v');
+                var s4 = hwItems[4].querySelector('.s');
+                var sys = payload.system_status || null;
+                if (v4) {
+                    v4.textContent = (sys && sys.pompa) ? ('Pompa ' + String(sys.pompa).toUpperCase()) : 'Standby';
+                    v4.classList.remove('off');
+                }
+                if (s4) {
+                    s4.textContent = (sys && sys.deepsleep_sec !== undefined) ? ('DeepSleep ' + sys.deepsleep_sec + 's') : 'Terhubung';
+                    s4.classList.remove('off');
+                }
             }
         }
 
@@ -801,7 +874,7 @@
         }
         if (weatherDescEl) {
             weatherDescEl.textContent = 'Terhubung · ' + (payload.device_id || 'ESP32');
-            weatherDescEl.style.color = '#2E7D32';
+            weatherDescEl.style.color = '#1B4332';
         }
         if (airHum && wstatsHumEl) {
             wstatsHumEl.innerHTML = '<small>Humidity</small>' + airHum.value.toFixed(1) + '%';
@@ -818,7 +891,7 @@
                 if (phBar) phBar.style.width = Math.min(100, Math.max(0, (ph.value / 14) * 100)).toFixed(1) + '%';
                 if (phSt) {
                     phSt.textContent = isPhWarn ? 'Warning' : 'Optimal';
-                    phSt.style.color = isPhWarn ? '#E65100' : '#2E7D32';
+                    phSt.style.color = isPhWarn ? '#E65100' : '#1B4332';
                 }
             }
             if (ec) {
@@ -829,7 +902,7 @@
                 if (ecBar) ecBar.style.width = Math.min(100, Math.max(5, (ec.value / 3.0) * 100)).toFixed(1) + '%';
                 if (ecSt) {
                     ecSt.textContent = 'Optimal';
-                    ecSt.style.color = '#2E7D32';
+                    ecSt.style.color = '#1B4332';
                 }
             }
             if (light) {
@@ -840,7 +913,7 @@
                 if (lxBar) lxBar.style.width = Math.min(100, Math.max(5, (light.value / 30000) * 100)).toFixed(1) + '%';
                 if (lxSt) {
                     lxSt.textContent = light.value > 200 ? 'Terang' : 'Redup';
-                    lxSt.style.color = '#2E7D32';
+                    lxSt.style.color = '#1B4332';
                 }
             }
         }
@@ -871,7 +944,7 @@
             if (minmaxSpans.length >= 3) {
                 minmaxSpans[0].textContent = 'Min: ' + minWaterTemp.toFixed(1) + '°C';
                 minmaxSpans[1].textContent = isWaterWarn ? 'Status: Warning' : 'Status: Normal';
-                minmaxSpans[1].style.color = isWaterWarn ? '#E65100' : '#2E7D32';
+                minmaxSpans[1].style.color = isWaterWarn ? '#E65100' : '#1B4332';
                 minmaxSpans[2].textContent = 'Max: ' + maxWaterTemp.toFixed(1) + '°C';
             }
         }
@@ -941,8 +1014,8 @@
             if (airBadge && (airTemp || airHum)) {
                 airBadge.textContent = 'Online';
                 airBadge.classList.remove('badge-offline');
-                airBadge.style.background = '#E8F5E9';
-                airBadge.style.color = '#2E7D32';
+                airBadge.style.background = '#EBF0ED';
+                airBadge.style.color = '#1B4332';
                 airBadge.style.padding = '4px 10px';
                 airBadge.style.borderRadius = '99px';
                 airBadge.style.fontSize = '12px';
@@ -981,8 +1054,8 @@
             if (luxBadge && light) {
                 luxBadge.textContent = 'Online';
                 luxBadge.classList.remove('badge-offline');
-                luxBadge.style.background = '#E8F5E9';
-                luxBadge.style.color = '#2E7D32';
+                luxBadge.style.background = '#EBF0ED';
+                luxBadge.style.color = '#1B4332';
                 luxBadge.style.padding = '4px 10px';
                 luxBadge.style.borderRadius = '99px';
                 luxBadge.style.fontSize = '12px';
@@ -1148,23 +1221,120 @@
         window.setAwsHistoryData('monthly', monthlyRows);
     }
 
+    function renderHeroRelayStatus(payload) {
+        if (!payload || typeof payload !== 'object') return;
+        var hwItems = document.querySelectorAll('.hero .hw > div');
+        if (hwItems.length < 5) return;
+
+        var v4 = hwItems[4].querySelector('.v');
+        var s4 = hwItems[4].querySelector('.s');
+        var ps = (payload.pumps_status && typeof payload.pumps_status === 'object') ? payload.pumps_status : null;
+
+        if (v4) {
+            if (ps) {
+                var pumpKeys = Object.keys(ps);
+                var activeCount = 0;
+                pumpKeys.forEach(function (k) {
+                    if (String(ps[k]).toUpperCase() === 'ON') activeCount++;
+                });
+                var onlyBigOn = activeCount === 1 && String(ps.pump_big).toUpperCase() === 'ON';
+                if (activeCount === 0) {
+                    v4.textContent = 'Semua OFF';
+                } else if (onlyBigOn) {
+                    v4.textContent = 'Pump Big ON';
+                } else {
+                    v4.textContent = activeCount + '/' + pumpKeys.length + ' Pompa ON';
+                }
+            } else {
+                v4.textContent = 'Terhubung';
+            }
+            v4.classList.remove('off');
+        }
+
+        if (s4) {
+            if (payload.active_interval_minutes !== undefined && payload.active_interval_minutes !== null) {
+                s4.textContent = 'Interval ' + payload.active_interval_minutes + ' mnt';
+            } else {
+                s4.textContent = payload.status_message || 'Terhubung';
+            }
+            s4.classList.remove('off');
+        }
+
+        if (ps) {
+            hwItems[4].title = (payload.status_message ? payload.status_message + ' · ' : '') +
+                'A:' + (ps.pump_A || '-') +
+                ' B:' + (ps.pump_B || '-') +
+                ' UP:' + (ps.pump_up || '-') +
+                ' DN:' + (ps.pump_down || '-') +
+                ' BIG:' + (ps.pump_big || '-');
+        } else if (payload.status_message) {
+            hwItems[4].title = payload.status_message;
+        }
+    }
+
+    function updateDeviceStatusUI(payload) {
+        if (!payload || typeof payload !== 'object') return;
+        lastDeviceStatus = payload;
+
+        var uptimeEl = document.getElementById('uptime');
+        if (uptimeEl) uptimeEl.textContent = formatWibTime(payload.timestamp) + ' WIB';
+
+        var hwItems = document.querySelectorAll('.hero .hw > div');
+        if (hwItems.length > 0) {
+            var v0 = hwItems[0].querySelector('.v');
+            var s0 = hwItems[0].querySelector('.s');
+            if (v0) {
+                v0.textContent = 'Online';
+                v0.classList.remove('off');
+            }
+            if (s0) {
+                if (s0.textContent.indexOf('WiFi ') !== 0) {
+                    s0.textContent = payload.device_id || 'Terhubung';
+                }
+                s0.classList.remove('off');
+            }
+        }
+
+        renderHeroRelayStatus(payload);
+
+        if (typeof window.syncAdminPumpsUI === 'function') {
+            window.syncAdminPumpsUI(payload.pumps_status, payload.active_interval_minutes, payload);
+        }
+    }
+
     function initMqttClient() {
         if (typeof mqtt === 'undefined') {
             console.warn('[TeFa MQTT] Library mqtt.min.js belum termuat.');
             return;
         }
 
+        if (window.tefaMqttClient) {
+            try {
+                if (typeof window.tefaMqttClient.removeAllListeners === 'function') {
+                    window.tefaMqttClient.removeAllListeners();
+                }
+                if (typeof window.tefaMqttClient.end === 'function') {
+                    window.tefaMqttClient.end(true);
+                }
+            } catch (e) { }
+            window.tefaMqttClient = null;
+        }
+
+        MQTT_CONFIG.options.clientId = 'tefa_web_' + Math.random().toString(16).slice(2, 10);
         console.log('[TeFa MQTT] Menghubungkan ke ' + MQTT_CONFIG.brokerUrl + ' (MQTT v3.1.1)...');
         setConnectionUI('Connecting', 'Menghubungkan MQTT...', false);
 
         var client = mqtt.connect(MQTT_CONFIG.brokerUrl, MQTT_CONFIG.options);
 
         client.on('connect', function () {
-            console.log('[TeFa MQTT] Terhubung ke broker.emqx.io! Mendaftarkan subscriptions...');
+            console.log('[TeFa MQTT] Terhubung ke ' + MQTT_CONFIG.brokerUrl + '! Mendaftarkan subscriptions...');
             setConnectionUI('Online', 'Menunggu data...', true);
 
-            var topics = Array.isArray(MQTT_CONFIG.topics) ? MQTT_CONFIG.topics : [MQTT_CONFIG.topic];
+            var topics = Array.isArray(MQTT_CONFIG.topics) ? MQTT_CONFIG.topics : [MQTT_CONFIG.topic, MQTT_CONFIG.statusTopic].filter(Boolean);
+            var seen = {};
             topics.forEach(function (top) {
+                if (seen[top]) return;
+                seen[top] = true;
                 client.subscribe(top, { qos: 0 }, function (err) {
                     if (err) {
                         console.error('[TeFa MQTT] Gagal subscribe ' + top + ':', err);
@@ -1183,19 +1353,22 @@
 
         client.on('message', function (topic, message) {
             try {
-                // Abaikan pesan aktuator atau control dari web
-                if (topic.indexOf('aktuator') !== -1 || topic.indexOf('control') !== -1) {
+                // Abaikan pesan control dari web sendiri
+                if (topic.indexOf('control') !== -1 || topic.indexOf('aktuator') !== -1) {
                     return;
                 }
 
                 var raw = message.toString();
                 var data = JSON.parse(raw);
-                console.log('[TeFa MQTT] Pesan diterima dari [' + topic + ']:', data);
+                console.log('[TeFa MQTT] Data diterima dari [' + topic + ']:', data);
+                if (topic === MQTT_CONFIG.statusTopic || (data && (data.pumps_status || data.status_message !== undefined))) {
+                    updateDeviceStatusUI(data);
+                }
 
                 var normalized = normalizePayload(data);
-                if (normalized) {
+                if (normalized && Array.isArray(normalized.sensors)) {
                     updateDashboardUI(normalized);
-                } else {
+                } else if (!data || (!data.pumps_status && data.status_message === undefined)) {
                     console.warn('[TeFa MQTT] Format data belum sesuai (harus ada nilai sensor seperti ph, ec, temp):', data);
                 }
             } catch (e) {
@@ -1268,6 +1441,67 @@
         }
     };
 
+    window.updateMqttConnectionConfig = function (cfg) {
+        var nextBroker = normalizeBrokerUrl((cfg && cfg.brokerUrl) || DEFAULT_MQTT_CONFIG.brokerUrl);
+        var nextSub = (cfg && cfg.topic ? String(cfg.topic).trim() : '') || DEFAULT_MQTT_CONFIG.topic;
+        var nextPub = (cfg && cfg.publishTopic ? String(cfg.publishTopic).trim() : '') || DEFAULT_MQTT_CONFIG.publishTopic;
+        var nextStatus = (cfg && cfg.statusTopic ? String(cfg.statusTopic).trim() : '') || DEFAULT_MQTT_CONFIG.statusTopic;
+
+        var prevBroker = MQTT_CONFIG.brokerUrl;
+        var prevSub = MQTT_CONFIG.topic;
+        var prevStatus = MQTT_CONFIG.statusTopic;
+
+        MQTT_CONFIG.brokerUrl = nextBroker;
+        MQTT_CONFIG.topic = nextSub;
+        MQTT_CONFIG.publishTopic = nextPub;
+        MQTT_CONFIG.statusTopic = nextStatus;
+
+        if (!window.tefaMqttClient || prevBroker !== nextBroker) {
+            initMqttClient();
+            return;
+        }
+
+        if (window.tefaMqttClient.connected) {
+            if (prevSub !== nextSub) {
+                try {
+                    if (typeof window.tefaMqttClient.unsubscribe === 'function') {
+                        window.tefaMqttClient.unsubscribe(prevSub);
+                    }
+                    window.tefaMqttClient.subscribe(nextSub, { qos: 0 }, function (err) {
+                        if (err) {
+                            console.error('[TeFa MQTT] Gagal subscribe ke topik baru:', err);
+                            setConnectionUI('Error', 'Gagal subscribe', false);
+                        } else {
+                            console.log('[TeFa MQTT] Topik subscribe diganti ke ' + nextSub);
+                            setConnectionUI('Online', 'Menunggu data...', true);
+                        }
+                    });
+                } catch (e) {
+                    initMqttClient();
+                    return;
+                }
+            }
+            if (prevStatus !== nextStatus) {
+                try {
+                    if (prevStatus && typeof window.tefaMqttClient.unsubscribe === 'function') {
+                        window.tefaMqttClient.unsubscribe(prevStatus);
+                    }
+                    if (nextStatus && nextStatus !== nextSub) {
+                        window.tefaMqttClient.subscribe(nextStatus, { qos: 0 }, function (err) {
+                            if (err) {
+                                console.error('[TeFa MQTT] Gagal subscribe ke topik status baru:', err);
+                            } else {
+                                console.log('[TeFa MQTT] Topik status diganti ke ' + nextStatus);
+                            }
+                        });
+                    }
+                } catch (e) {
+                    initMqttClient();
+                }
+            }
+        }
+    };
+
     function initChartControls() {
         var rangeTabs = document.getElementById('rangeTabs');
         if (rangeTabs) {
@@ -1308,8 +1542,23 @@
     }
 
     function init() {
+        loadSavedMqttConfig();
         initChartControls();
         initMqttClient();
+
+        window.addEventListener('storage', function (e) {
+            if (e.key === 'tefa_dashboard_settings' && typeof window.updateMqttConnectionConfig === 'function') {
+                try {
+                    var updated = JSON.parse(e.newValue || '{}');
+                    window.updateMqttConnectionConfig({
+                        brokerUrl: updated.mqttBroker,
+                        topic: updated.mqttTopicSub,
+                        publishTopic: updated.mqttTopicPub,
+                        statusTopic: updated.mqttTopicStatus
+                    });
+                } catch (err) { }
+            }
+        });
     }
 
     if (document.readyState === 'loading') {
