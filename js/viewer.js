@@ -300,22 +300,24 @@
                     tempMin: '20', tempMax: '30',
                     humMin: '50', humMax: '85',
                     interval: '3',
+                    aiProvider: 'gemini',
                     apiKey: ''
                 };
 
                 function loadSettings() {
                     try {
                         var saved = JSON.parse(localStorage.getItem('tefa_dashboard_settings') || '{}');
-                        document.getElementById('set_ph_min').value = saved.phMin || defaultSettings.phMin;
-                        document.getElementById('set_ph_max').value = saved.phMax || defaultSettings.phMax;
-                        document.getElementById('set_tds_min').value = saved.tdsMin || defaultSettings.tdsMin;
-                        document.getElementById('set_tds_max').value = saved.tdsMax || defaultSettings.tdsMax;
-                        document.getElementById('set_temp_min').value = saved.tempMin || defaultSettings.tempMin;
-                        document.getElementById('set_temp_max').value = saved.tempMax || defaultSettings.tempMax;
-                        document.getElementById('set_hum_min').value = saved.humMin || defaultSettings.humMin;
-                        document.getElementById('set_hum_max').value = saved.humMax || defaultSettings.humMax;
-                        document.getElementById('set_telemetry_interval').value = saved.interval || defaultSettings.interval;
-                        document.getElementById('set_ai_api_key').value = saved.apiKey || defaultSettings.apiKey;
+                        if (document.getElementById('set_ph_min')) document.getElementById('set_ph_min').value = saved.phMin || defaultSettings.phMin;
+                        if (document.getElementById('set_ph_max')) document.getElementById('set_ph_max').value = saved.phMax || defaultSettings.phMax;
+                        if (document.getElementById('set_tds_min')) document.getElementById('set_tds_min').value = saved.tdsMin || defaultSettings.tdsMin;
+                        if (document.getElementById('set_tds_max')) document.getElementById('set_tds_max').value = saved.tdsMax || defaultSettings.tdsMax;
+                        if (document.getElementById('set_temp_min')) document.getElementById('set_temp_min').value = saved.tempMin || defaultSettings.tempMin;
+                        if (document.getElementById('set_temp_max')) document.getElementById('set_temp_max').value = saved.tempMax || defaultSettings.tempMax;
+                        if (document.getElementById('set_hum_min')) document.getElementById('set_hum_min').value = saved.humMin || defaultSettings.humMin;
+                        if (document.getElementById('set_hum_max')) document.getElementById('set_hum_max').value = saved.humMax || defaultSettings.humMax;
+                        if (document.getElementById('set_telemetry_interval')) document.getElementById('set_telemetry_interval').value = saved.interval || defaultSettings.interval;
+                        if (document.getElementById('set_ai_provider')) document.getElementById('set_ai_provider').value = saved.aiProvider || defaultSettings.aiProvider;
+                        if (document.getElementById('set_ai_api_key')) document.getElementById('set_ai_api_key').value = saved.apiKey || defaultSettings.apiKey;
                     } catch (e) {
                         console.error('Failed to load settings:', e);
                     }
@@ -392,8 +394,9 @@
                         document.getElementById('set_temp_max').value = defaultSettings.tempMax;
                         document.getElementById('set_hum_min').value = defaultSettings.humMin;
                         document.getElementById('set_hum_max').value = defaultSettings.humMax;
-                        document.getElementById('set_telemetry_interval').value = defaultSettings.interval;
-                        document.getElementById('set_ai_api_key').value = defaultSettings.apiKey;
+                        if (document.getElementById('set_telemetry_interval')) document.getElementById('set_telemetry_interval').value = defaultSettings.interval;
+                        if (document.getElementById('set_ai_provider')) document.getElementById('set_ai_provider').value = defaultSettings.aiProvider;
+                        if (document.getElementById('set_ai_api_key')) document.getElementById('set_ai_api_key').value = defaultSettings.apiKey;
                         localStorage.removeItem('tefa_dashboard_settings');
                     });
                 }
@@ -409,8 +412,9 @@
                             tempMax: document.getElementById('set_temp_max').value.trim(),
                             humMin: document.getElementById('set_hum_min').value.trim(),
                             humMax: document.getElementById('set_hum_max').value.trim(),
-                            interval: document.getElementById('set_telemetry_interval').value,
-                            apiKey: document.getElementById('set_ai_api_key').value.trim()
+                            interval: document.getElementById('set_telemetry_interval') ? document.getElementById('set_telemetry_interval').value : defaultSettings.interval,
+                            aiProvider: document.getElementById('set_ai_provider') ? document.getElementById('set_ai_provider').value : defaultSettings.aiProvider,
+                            apiKey: document.getElementById('set_ai_api_key') ? document.getElementById('set_ai_api_key').value.trim() : defaultSettings.apiKey
                         };
                         localStorage.setItem('tefa_dashboard_settings', JSON.stringify(newSettings));
                         
@@ -440,8 +444,992 @@
                 var aiSend = document.getElementById('aiBtnSend');
                 var aiInput = document.getElementById('aiInput');
                 var aiMessages = document.getElementById('aiChatMessages');
+                var aiBtnTtsToggle = document.getElementById('aiBtnTtsToggle');
+                var aiBtnVoiceOrb = document.getElementById('aiBtnVoiceOrb');
+                var aiBtnMic = document.getElementById('aiBtnMic');
+                var voicePanel = document.getElementById('aiVoiceOrbPanel');
+                var orbStatusBadge = document.getElementById('aiOrbStatusBadge');
+                var orbMicBtn = document.getElementById('aiOrbMicBtn');
+                var orbBackBtn = document.getElementById('aiOrbBackBtn');
+                var orbCloseBtn = document.getElementById('aiOrbCloseBtn');
+                var orbResizeHandle = document.getElementById('aiOrbResizeHandle');
+                var orbSizeDownBtn = document.getElementById('aiOrbSizeDownBtn');
+                var orbSizeUpBtn = document.getElementById('aiOrbSizeUpBtn');
+                var orbTrigger = document.getElementById('aiOrbTrigger');
+                var orbTopbar = voicePanel ? voicePanel.querySelector('.ai-voice-orb-topbar') : null;
+                var orbCanvas = document.getElementById('aiVoiceOrbCanvas');
+                var orbTranscript = document.getElementById('aiOrbTranscript');
 
                 if (!aiBtn || !aiPopup) return;
+
+                var DEFAULT_ORB_HINT = 'Generate expressive prompts by speaking naturally. Ketuk orb untuk mulai bertanya dengan suara.';
+                var MIN_ORB_SIZE = 160;
+                var MAX_ORB_SIZE = 560;
+                var currentOrbSize = window.innerWidth <= 680 ? 290 : 380;
+                var suppressOrbClick = false;
+                var ttsEnabled = true;
+                var isListening = false;
+                var isSpeaking = false;
+                var orbMode = 'idle'; // 'idle' | 'listening' | 'speaking'
+                var orbRafId = null;
+                var orbPhase = 0;
+                var smoothedEnergy = 0;
+                var speechPulse = 0;
+                var recognition = null;
+                var latestTranscript = '';
+                var audioCtx = null;
+                var analyser = null;
+                var freqData = null;
+                var micStream = null;
+                var activeSpeakBtn = null;
+                var preferredVoice = null;
+
+                function resolveIndonesianVoice() {
+                    if (!('speechSynthesis' in window)) return null;
+                    var voices = window.speechSynthesis.getVoices() || [];
+                    for (var i = 0; i < voices.length; i++) {
+                        if (voices[i].lang && voices[i].lang.toLowerCase().indexOf('id') === 0) {
+                            return voices[i];
+                        }
+                    }
+                    for (var j = 0; j < voices.length; j++) {
+                        if (voices[j].default) return voices[j];
+                    }
+                    return voices[0] || null;
+                }
+
+                if ('speechSynthesis' in window) {
+                    preferredVoice = resolveIndonesianVoice();
+                    if (typeof window.speechSynthesis.onvoiceschanged !== 'undefined') {
+                        window.speechSynthesis.onvoiceschanged = function() {
+                            preferredVoice = resolveIndonesianVoice();
+                        };
+                    }
+                }
+
+                function setOrbStatus(text, stateClass) {
+                    if (orbStatusBadge) orbStatusBadge.textContent = text;
+                    if (!voicePanel) return;
+                    voicePanel.classList.remove('is-listening', 'is-speaking');
+                    if (stateClass) voicePanel.classList.add(stateClass);
+                }
+
+                function setOrbTranscript(text, isActiveSpeech) {
+                    if (!orbTranscript) return;
+                    orbTranscript.textContent = text;
+                    if (isActiveSpeech) {
+                        orbTranscript.classList.add('active-speech');
+                    } else {
+                        orbTranscript.classList.remove('active-speech');
+                    }
+                }
+
+                function updateMicButtonsUI(active) {
+                    if (aiBtnMic) aiBtnMic.classList.toggle('listening', active);
+                    if (orbMicBtn) orbMicBtn.classList.toggle('active', active);
+                }
+
+                function updateTtsToggleUI() {
+                    if (!aiBtnTtsToggle) return;
+                    aiBtnTtsToggle.classList.toggle('active', ttsEnabled);
+                    aiBtnTtsToggle.title = ttsEnabled
+                        ? 'Suara AI (Text-to-Speech) Aktif'
+                        : 'Suara AI (Text-to-Speech) Nonaktif';
+                    var volOn = aiBtnTtsToggle.querySelector('.icon-vol-on');
+                    var volOff = aiBtnTtsToggle.querySelector('.icon-vol-off');
+                    if (volOn) volOn.style.display = ttsEnabled ? '' : 'none';
+                    if (volOff) volOff.style.display = ttsEnabled ? 'none' : '';
+                }
+
+                function stopMicAnalyser() {
+                    if (micStream) {
+                        var tracks = micStream.getTracks();
+                        for (var i = 0; i < tracks.length; i++) {
+                            tracks[i].stop();
+                        }
+                        micStream = null;
+                    }
+                    if (audioCtx && typeof audioCtx.close === 'function') {
+                        try {
+                            audioCtx.close();
+                        } catch (err) {
+                            // ignore AudioContext close errors
+                        }
+                    }
+                    audioCtx = null;
+                    analyser = null;
+                    freqData = null;
+                }
+
+                function startMicAnalyser() {
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+                    var AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioCtx) return;
+
+                    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+                        if (!isListening) {
+                            stream.getTracks().forEach(function(t) { t.stop(); });
+                            return;
+                        }
+                        micStream = stream;
+                        audioCtx = new AudioCtx();
+                        var source = audioCtx.createMediaStreamSource(stream);
+                        analyser = audioCtx.createAnalyser();
+                        analyser.fftSize = 64;
+                        analyser.smoothingTimeConstant = 0.78;
+                        source.connect(analyser);
+                        freqData = new Uint8Array(analyser.frequencyBinCount);
+                    }).catch(function() {
+                        // Fallback gracefully to procedural + speechPulse reactivity
+                    });
+                }
+
+                function resetSpeakButtons() {
+                    if (!aiMessages) return;
+                    var btns = aiMessages.querySelectorAll('.ai-msg-speak-btn.speaking');
+                    for (var i = 0; i < btns.length; i++) {
+                        btns[i].classList.remove('speaking');
+                        var label = btns[i].querySelector('span');
+                        if (label) label.textContent = 'Dengarkan';
+                    }
+                    activeSpeakBtn = null;
+                }
+
+                function stopSpeaking() {
+                    if ('speechSynthesis' in window) {
+                        window.speechSynthesis.cancel();
+                    }
+                    isSpeaking = false;
+                    resetSpeakButtons();
+                    if (!isListening) {
+                        orbMode = 'idle';
+                        setOrbStatus('Ketuk Orb untuk Bicara', '');
+                    }
+                }
+
+                function speakText(text, btnEl) {
+                    if (!('speechSynthesis' in window) || !text) return;
+
+                    var clickedSameActive = btnEl && activeSpeakBtn === btnEl && isSpeaking;
+                    stopSpeaking();
+                    if (clickedSameActive) return;
+
+                    var cleanText = String(text).replace(/\s+/g, ' ').trim();
+                    if (!cleanText) return;
+
+                    var utterance = new SpeechSynthesisUtterance(cleanText);
+                    if (!preferredVoice) preferredVoice = resolveIndonesianVoice();
+                    if (preferredVoice) utterance.voice = preferredVoice;
+                    utterance.lang = 'id-ID';
+                    utterance.rate = 1.02;
+                    utterance.pitch = 1.0;
+
+                    if (btnEl) {
+                        activeSpeakBtn = btnEl;
+                        btnEl.classList.add('speaking');
+                        var spanEl = btnEl.querySelector('span');
+                        if (spanEl) spanEl.textContent = 'Berhenti';
+                    }
+
+                    utterance.onstart = function() {
+                        isSpeaking = true;
+                        if (!isListening) {
+                            orbMode = 'speaking';
+                            setOrbStatus('AI Sedang Berbicara...', 'is-speaking');
+                        }
+                    };
+
+                    utterance.onend = function() {
+                        isSpeaking = false;
+                        resetSpeakButtons();
+                        if (!isListening) {
+                            orbMode = 'idle';
+                            setOrbStatus('Ketuk Orb untuk Bicara', '');
+                        }
+                    };
+
+                    utterance.onerror = function() {
+                        isSpeaking = false;
+                        resetSpeakButtons();
+                        if (!isListening) {
+                            orbMode = 'idle';
+                            setOrbStatus('Ketuk Orb untuk Bicara', '');
+                        }
+                    };
+
+                    window.speechSynthesis.speak(utterance);
+                }
+
+                // Render Halftone Concentric Ring Voice Orb on Pure Black Canvas
+                function renderVoiceOrbFrame() {
+                    if (!orbCanvas || !voicePanel || !voicePanel.classList.contains('open')) {
+                        orbRafId = null;
+                        return;
+                    }
+
+                    var ctx = orbCanvas.getContext('2d');
+                    if (!ctx) return;
+
+                    var w = orbCanvas.width;
+                    var h = orbCanvas.height;
+                    var cx = w * 0.5;
+                    var cy = h * 0.5;
+                    var R = Math.min(w, h) * 0.44;
+                    var step = 6;
+
+                    ctx.clearRect(0, 0, w, h);
+
+                    var targetEnergy = 0.04;
+                    if (orbMode === 'listening') {
+                        var micLevel = 0;
+                        if (analyser && freqData) {
+                            analyser.getByteFrequencyData(freqData);
+                            var sum = 0;
+                            for (var f = 0; f < freqData.length; f++) {
+                                sum += freqData[f];
+                            }
+                            micLevel = Math.min(1, (sum / (freqData.length * 145)));
+                        }
+                        var basePulse = 0.16 + 0.07 * Math.sin(orbPhase * 1.9);
+                        targetEnergy = Math.min(1, Math.max(basePulse, micLevel * 0.95) + speechPulse * 0.45);
+                    } else if (orbMode === 'speaking') {
+                        var cadence = Math.abs(Math.sin(orbPhase * 2.4)) * 0.48
+                            + Math.abs(Math.cos(orbPhase * 3.9)) * 0.28
+                            + Math.sin(orbPhase * 1.1) * 0.08;
+                        targetEnergy = Math.min(1, 0.22 + Math.max(0, cadence) * 0.65);
+                    }
+
+                    speechPulse *= 0.88;
+                    smoothedEnergy += (targetEnergy - smoothedEnergy) * 0.18;
+                    orbPhase += orbMode === 'idle' ? 0.032 : (0.075 + smoothedEnergy * 0.08);
+
+                    // Soft circular dark sphere strictly within orb radius so outside remains transparent
+                    var sphereRadius = R * 1.06;
+                    var sphereGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, sphereRadius);
+                    sphereGrad.addColorStop(0, 'rgba(6, 10, 8, 0.94)');
+                    sphereGrad.addColorStop(0.58, 'rgba(6, 10, 8, 0.88)');
+                    sphereGrad.addColorStop(0.86, 'rgba(6, 10, 8, 0.56)');
+                    sphereGrad.addColorStop(1, 'rgba(6, 10, 8, 0)');
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, sphereRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = sphereGrad;
+                    ctx.fill();
+
+                    var coreRadius = (0.125 + smoothedEnergy * 0.024) * R;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, coreRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(155, 158, 156, ' + (0.52 + smoothedEnergy * 0.16).toFixed(3) + ')';
+                    ctx.fill();
+
+                    var ringCenter = 0.38 + smoothedEnergy * 0.042;
+                    var ringSpread = 0.082 + smoothedEnergy * 0.034;
+
+                    for (var dy = -R; dy <= R; dy += step) {
+                        for (var dx = -R; dx <= R; dx += step) {
+                            var r = Math.sqrt(dx * dx + dy * dy);
+                            if (r > R) continue;
+
+                            var u = r / R;
+                            var theta = Math.atan2(dy, dx);
+                            var angularWave =
+                                Math.sin(theta * 3 + orbPhase) * (0.012 + smoothedEnergy * 0.032) +
+                                Math.cos(theta * 5 - orbPhase * 1.35) * (0.008 + smoothedEnergy * 0.022);
+
+                            var localCenter = ringCenter + angularWave;
+                            var ringVal = Math.exp(-Math.pow((u - localCenter) / ringSpread, 2));
+
+                            var outerFalloff = 0;
+                            if (u > localCenter) {
+                                var tOut = Math.min(1, (u - localCenter) / Math.max(0.01, 1 - localCenter));
+                                outerFalloff = Math.pow(1 - tOut, 1.85) * 0.56;
+                            } else {
+                                var tIn = u / Math.max(0.01, localCenter);
+                                outerFalloff = (0.20 + 0.16 * tIn);
+                            }
+
+                            var intensity = Math.min(1, ringVal * 1.18 + outerFalloff * 0.85);
+                            var edgeFade = u > 0.9 ? Math.max(0.15, (1 - u) / 0.1) : 1;
+
+                            var halfSize = 0.42 + Math.pow(intensity, 1.65) * (3.15 + smoothedEnergy * 1.1);
+                            if (u < 0.12) {
+                                halfSize = 0.72 + smoothedEnergy * 0.35;
+                            }
+
+                            var alpha = Math.min(1, (0.28 + Math.pow(intensity, 1.1) * 0.72) * edgeFade);
+                            if (u < 0.12) alpha = 0.42 + smoothedEnergy * 0.18;
+
+                            ctx.fillStyle = 'rgba(255, 255, 255, ' + alpha.toFixed(3) + ')';
+                            var px = cx + dx;
+                            var py = cy + dy;
+                            ctx.fillRect(px - halfSize, py - halfSize, halfSize * 2, halfSize * 2);
+                        }
+                    }
+
+                    orbRafId = window.requestAnimationFrame(renderVoiceOrbFrame);
+                }
+
+                function startOrbAnimation() {
+                    if (orbRafId !== null) return;
+                    orbRafId = window.requestAnimationFrame(renderVoiceOrbFrame);
+                }
+
+                function stopOrbAnimation() {
+                    if (orbRafId !== null) {
+                        window.cancelAnimationFrame(orbRafId);
+                        orbRafId = null;
+                    }
+                }
+
+                function clampOrbPanelToViewport() {
+                    if (!voicePanel || !voicePanel.classList.contains('has-custom-pos')) return;
+                    var rect = voicePanel.getBoundingClientRect();
+                    var maxLeft = Math.max(8, window.innerWidth - rect.width - 8);
+                    var maxTop = Math.max(8, window.innerHeight - rect.height - 8);
+                    var clampedLeft = Math.min(maxLeft, Math.max(8, rect.left));
+                    var clampedTop = Math.min(maxTop, Math.max(8, rect.top));
+                    voicePanel.style.left = clampedLeft + 'px';
+                    voicePanel.style.top = clampedTop + 'px';
+                }
+
+                function setOrbSize(nextSize) {
+                    var maxFit = Math.min(MAX_ORB_SIZE, window.innerWidth - 40, window.innerHeight - 110);
+                    var upper = Math.max(MIN_ORB_SIZE, maxFit);
+                    currentOrbSize = Math.round(Math.min(upper, Math.max(MIN_ORB_SIZE, nextSize)));
+                    if (orbCanvas) {
+                        orbCanvas.style.width = currentOrbSize + 'px';
+                        orbCanvas.style.height = currentOrbSize + 'px';
+                    }
+                    clampOrbPanelToViewport();
+                }
+
+                function attachPanelDrag(handleEl, isOrbSurface) {
+                    if (!handleEl || !voicePanel) return;
+                    handleEl.addEventListener('pointerdown', function(e) {
+                        if (e.button && e.button !== 0) return;
+                        if (orbResizeHandle && (e.target === orbResizeHandle || orbResizeHandle.contains(e.target))) return;
+                        if (!isOrbSurface && e.target.closest('button')) return;
+
+                        var startX = e.clientX;
+                        var startY = e.clientY;
+                        var panelRect = voicePanel.getBoundingClientRect();
+                        var startLeft = panelRect.left;
+                        var startTop = panelRect.top;
+                        var moved = false;
+
+                        function onPointerMove(ev) {
+                            var dx = ev.clientX - startX;
+                            var dy = ev.clientY - startY;
+                            if (!moved && Math.hypot(dx, dy) < 6) return;
+                            if (!moved) {
+                                moved = true;
+                                if (isOrbSurface) suppressOrbClick = true;
+                                voicePanel.classList.add('has-custom-pos', 'is-dragging');
+                                voicePanel.style.left = startLeft + 'px';
+                                voicePanel.style.top = startTop + 'px';
+                            }
+                            var curRect = voicePanel.getBoundingClientRect();
+                            var maxLeft = Math.max(8, window.innerWidth - curRect.width - 8);
+                            var maxTop = Math.max(8, window.innerHeight - curRect.height - 8);
+                            voicePanel.style.left = Math.min(maxLeft, Math.max(8, startLeft + dx)) + 'px';
+                            voicePanel.style.top = Math.min(maxTop, Math.max(8, startTop + dy)) + 'px';
+                        }
+
+                        function onPointerUp() {
+                            window.removeEventListener('pointermove', onPointerMove);
+                            window.removeEventListener('pointerup', onPointerUp);
+                            window.removeEventListener('pointercancel', onPointerUp);
+                            voicePanel.classList.remove('is-dragging');
+                            if (moved && isOrbSurface) {
+                                setTimeout(function() {
+                                    suppressOrbClick = false;
+                                }, 60);
+                            }
+                        }
+
+                        window.addEventListener('pointermove', onPointerMove);
+                        window.addEventListener('pointerup', onPointerUp);
+                        window.addEventListener('pointercancel', onPointerUp);
+                    });
+                }
+
+                function openVoiceOrb() {
+                    if (!voicePanel) return;
+                    if (!voicePanel.classList.contains('has-custom-pos')) {
+                        voicePanel.style.left = '';
+                        voicePanel.style.top = '';
+                    }
+                    aiPopup.classList.remove('open', 'closing');
+                    aiBtn.classList.add('hidden');
+                    voicePanel.classList.add('open');
+                    voicePanel.setAttribute('aria-hidden', 'false');
+                    setOrbSize(currentOrbSize);
+                    if (aiBtnVoiceOrb) aiBtnVoiceOrb.classList.add('voice-active');
+                    startOrbAnimation();
+                }
+
+                function closeVoiceOrb(reopenChat) {
+                    if (!voicePanel) return;
+                    if (isListening) stopListening();
+                    if (!reopenChat) stopSpeaking();
+                    voicePanel.classList.remove('open', 'is-listening', 'is-speaking');
+                    voicePanel.setAttribute('aria-hidden', 'true');
+                    if (aiBtnVoiceOrb) aiBtnVoiceOrb.classList.remove('voice-active');
+                    stopOrbAnimation();
+                    if (reopenChat) {
+                        openPopup();
+                    } else {
+                        aiBtn.classList.remove('hidden');
+                    }
+                }
+
+                function readDashboardTelemetry() {
+                    var sensors = [];
+                    var sensorCards = document.querySelectorAll('.sensors .sensor');
+                    for (var i = 0; i < sensorCards.length; i++) {
+                        var lblEl = sensorCards[i].querySelector('.lbl');
+                        var bigEl = sensorCards[i].querySelector('.big');
+                        var stEl = sensorCards[i].querySelector('.st');
+                        if (lblEl && bigEl) {
+                            sensors.push(
+                                lblEl.textContent.trim().toUpperCase() + ': ' +
+                                bigEl.textContent.trim() +
+                                (stEl ? ' (' + stEl.textContent.trim() + ')' : '')
+                            );
+                        }
+                    }
+                    var weatherTempEl = document.querySelector('.weather .temp');
+                    var weatherDescEl = document.querySelector('.weather .desc');
+                    var waterTempEl = document.querySelector('.donut b');
+                    return {
+                        sensorsSummary: sensors.length ? sensors.join(', ') : 'pH, Nutrisi, Cahaya N/A',
+                        weatherTemp: weatherTempEl ? weatherTempEl.textContent.trim() : 'N/A',
+                        weatherDesc: weatherDescEl ? weatherDescEl.textContent.trim() : 'Terputus',
+                        waterTemp: waterTempEl ? waterTempEl.textContent.trim() : 'N/A'
+                    };
+                }
+
+                function generateAiReply(text) {
+                    var lower = text.toLowerCase();
+                    var t = readDashboardTelemetry();
+
+                    if (lower.includes('ph') || lower.includes('nutrisi') || lower.includes('tds') || lower.includes('ec') || lower.includes('cahaya') || lower.includes('lux')) {
+                        return 'Pembacaan sensor saat ini: ' + t.sensorsSummary + '. Suhu air tercatat ' + t.waterTemp + '.';
+                    }
+                    if (lower.includes('suhu') || lower.includes('cuaca') || lower.includes('kelembaban') || lower.includes('kelembapan') || lower.includes('aws')) {
+                        return 'Kondisi lingkungan greenhouse: suhu udara ' + t.weatherTemp + ' dengan status ' + t.weatherDesc + ', dan suhu air ' + t.waterTemp + '.';
+                    }
+                    if (lower.includes('status') || lower.includes('sensor') || lower.includes('cek') || lower.includes('diagnosa')) {
+                        return 'Ringkasan telemetri: ' + t.sensorsSummary + '. Suhu air ' + t.waterTemp + ', status cuaca ' + t.weatherDesc + '. Data otomatis diperbarui bila ESP32 tersambung.';
+                    }
+                    if (lower.includes('hai') || lower.includes('halo') || lower.includes('selamat')) {
+                        return 'Halo! Saya Asisten AI Greenhouse Anda. Silakan tanya lewat suara atau ketik mengenai pH, nutrisi, suhu air, dan cuaca.';
+                    }
+                    return 'Saya menerima pertanyaan Anda: "' + text + '". Data saat ini: ' + t.sensorsSummary + ' dengan suhu air ' + t.waterTemp + '.';
+                }
+
+                function createSpeakButtonSVG() {
+                    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                        '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>' +
+                        '<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>' +
+                        '</svg><span>Dengarkan</span>';
+                }
+
+                function appendBotMessage(replyText, shouldAutoSpeak) {
+                    if (!aiMessages) return;
+                    var botMsg = document.createElement('div');
+                    botMsg.className = 'ai-msg-bot';
+
+                    var head = document.createElement('div');
+                    head.className = 'ai-msg-bot-head';
+
+                    var badge = document.createElement('div');
+                    badge.className = 'ai-badge-label';
+                    badge.textContent = 'AI';
+
+                    var speakBtn = document.createElement('button');
+                    speakBtn.type = 'button';
+                    speakBtn.className = 'ai-msg-speak-btn';
+                    speakBtn.title = 'Bacakan jawaban AI (Text-to-Speech)';
+                    speakBtn.innerHTML = createSpeakButtonSVG();
+                    speakBtn.addEventListener('click', function() {
+                        speakText(replyText, speakBtn);
+                    });
+
+                    head.appendChild(badge);
+                    head.appendChild(speakBtn);
+
+                    var msgText = document.createElement('div');
+                    msgText.className = 'ai-msg-text';
+                    msgText.textContent = replyText;
+
+                    botMsg.appendChild(head);
+                    botMsg.appendChild(msgText);
+                    aiMessages.appendChild(botMsg);
+                    aiMessages.scrollTop = aiMessages.scrollHeight;
+
+                    if (shouldAutoSpeak) {
+                        speakText(replyText, speakBtn);
+                    }
+                }
+
+                var AI_PROVIDERS = {
+                    gemini: {
+                        label: 'Gemini',
+                        type: 'gemini',
+                        models: ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+                    },
+                    groq: {
+                        label: 'Groq',
+                        type: 'openai',
+                        url: 'https://api.groq.com/openai/v1/chat/completions',
+                        modelsUrl: 'https://api.groq.com/openai/v1/models',
+                        models: [
+                            'llama-3.1-8b-instant',
+                            'meta-llama/llama-4-scout-17b-16e-instruct',
+                            'qwen/qwen3-32b',
+                            'qwen-qwq-32b',
+                            'gemma2-9b-it',
+                            'llama3-8b-8192',
+                            'llama-3.3-70b-versatile'
+                        ]
+                    },
+                    qwen: {
+                        label: 'Qwen',
+                        type: 'openai',
+                        url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
+                        modelsUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/models',
+                        models: ['qwen-plus', 'qwen-turbo', 'qwen-max', 'qwen2.5-72b-instruct']
+                    },
+                    openai: {
+                        label: 'OpenAI',
+                        type: 'openai',
+                        url: 'https://api.openai.com/v1/chat/completions',
+                        modelsUrl: 'https://api.openai.com/v1/models',
+                        models: ['gpt-4o-mini', 'gpt-4.1-mini', 'gpt-3.5-turbo']
+                    },
+                    deepseek: {
+                        label: 'DeepSeek',
+                        type: 'openai',
+                        url: 'https://api.deepseek.com/chat/completions',
+                        modelsUrl: 'https://api.deepseek.com/models',
+                        models: ['deepseek-chat', 'deepseek-reasoner']
+                    },
+                    openrouter: {
+                        label: 'OpenRouter',
+                        type: 'openai',
+                        url: 'https://openrouter.ai/api/v1/chat/completions',
+                        modelsUrl: 'https://openrouter.ai/api/v1/models',
+                        models: ['openai/gpt-4o-mini', 'google/gemini-2.0-flash-001', 'meta-llama/llama-3.1-8b-instruct:free']
+                    }
+                };
+
+                var workingModelCache = {};
+
+                function cleanAiReplyText(raw) {
+                    var text = String(raw || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+                    if (/^<think>/i.test(text)) {
+                        var splitIdx = text.lastIndexOf('\n\n');
+                        text = splitIdx !== -1 ? text.slice(splitIdx + 2).trim() : '';
+                    }
+                    return text;
+                }
+
+                function getSavedAiConfig() {
+                    try {
+                        var saved = JSON.parse(localStorage.getItem('tefa_dashboard_settings') || '{}');
+                        var provider = saved.aiProvider && AI_PROVIDERS[saved.aiProvider] ? saved.aiProvider : 'gemini';
+                        var apiKey = typeof saved.apiKey === 'string' ? saved.apiKey.replace(/^["']|["']$/g, '').trim() : '';
+                        var preferQwenOnGroq = false;
+                        if (apiKey.indexOf('AIza') === 0) {
+                            provider = 'gemini';
+                        } else if (apiKey.indexOf('gsk_') === 0) {
+                            if (provider === 'qwen') preferQwenOnGroq = true;
+                            provider = 'groq';
+                        } else if (apiKey.indexOf('sk-or-') === 0) {
+                            provider = 'openrouter';
+                        }
+                        return {
+                            provider: provider,
+                            apiKey: apiKey,
+                            preferQwenOnGroq: preferQwenOnGroq
+                        };
+                    } catch (e) {
+                        return { provider: 'gemini', apiKey: '', preferQwenOnGroq: false };
+                    }
+                }
+
+                function isAuthOrQuotaError(status, msg) {
+                    return status === 401 || status === 403 || status === 429 ||
+                        /invalid.*api.?key|incorrect.*api.?key|unauthorized|authentication|quota|billing|rate.?limit/i.test(msg || '');
+                }
+
+                function isModelUnavailableError(status, msg) {
+                    if (isAuthOrQuotaError(status, msg)) return false;
+                    return status === 404 ||
+                        /does not exist|not have access|model_not_found|decommissioned|not found|invalid_model|not supported|deprecated/i.test(msg || '');
+                }
+
+                function discoverChatModels(providerKey, spec, apiKey, preferQwen) {
+                    if (spec.type === 'gemini') {
+                        var listUrl = 'https://generativelanguage.googleapis.com/v1beta/models?key=' + encodeURIComponent(apiKey);
+                        return fetch(listUrl).then(function(res) {
+                            if (!res.ok) return [];
+                            return res.json();
+                        }).then(function(data) {
+                            var items = (data && data.models) || [];
+                            var found = [];
+                            for (var i = 0; i < items.length; i++) {
+                                var m = items[i];
+                                var methods = m.supportedGenerationMethods || [];
+                                if (methods.indexOf('generateContent') === -1) continue;
+                                var id = String(m.name || '').replace(/^models\//, '');
+                                if (!id || /embedding|aqa|imagen|tts|robotics/i.test(id)) continue;
+                                found.push(id);
+                            }
+                            found.sort(function(a, b) {
+                                var score = function(s) {
+                                    if (/2\.0-flash|2\.5-flash/.test(s)) return 0;
+                                    if (/flash/.test(s)) return 1;
+                                    return 2;
+                                };
+                                return score(a) - score(b);
+                            });
+                            return found;
+                        }).catch(function() { return []; });
+                    }
+
+                    if (!spec.modelsUrl) return Promise.resolve([]);
+                    return fetch(spec.modelsUrl, {
+                        method: 'GET',
+                        headers: { 'Authorization': 'Bearer ' + apiKey }
+                    }).then(function(res) {
+                        if (!res.ok) return [];
+                        return res.json();
+                    }).then(function(data) {
+                        var items = (data && data.data) || [];
+                        var found = [];
+                        for (var i = 0; i < items.length; i++) {
+                            var id = items[i] && items[i].id;
+                            if (!id) continue;
+                            if (/whisper|tts|guard|embed|rerank|playai|orpheus|dall-e|sora|realtime|transcribe|audio|moderation|imagen|veo/i.test(id)) continue;
+                            found.push(id);
+                        }
+                        if (preferQwen) {
+                            found.sort(function(a, b) {
+                                var aq = /qwen/i.test(a) ? 0 : 1;
+                                var bq = /qwen/i.test(b) ? 0 : 1;
+                                return aq - bq;
+                            });
+                        } else if (providerKey === 'groq') {
+                            var pref = spec.models || [];
+                            found.sort(function(a, b) {
+                                var ai = pref.indexOf(a);
+                                var bi = pref.indexOf(b);
+                                return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+                            });
+                        }
+                        return found;
+                    }).catch(function() { return []; });
+                }
+
+                function callSingleModel(spec, apiKey, modelId, systemPrompt, userText) {
+                    if (spec.type === 'gemini') {
+                        var geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(modelId) + ':generateContent?key=' + encodeURIComponent(apiKey);
+                        return fetch(geminiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                systemInstruction: { parts: [{ text: systemPrompt }] },
+                                contents: [{ role: 'user', parts: [{ text: userText }] }]
+                            })
+                        }).then(function(res) {
+                            return res.json().catch(function() { return {}; }).then(function(data) {
+                                var errMsg = (data && data.error && data.error.message) || ('HTTP ' + res.status);
+                                if (!res.ok) {
+                                    var err = new Error(errMsg);
+                                    err.status = res.status;
+                                    throw err;
+                                }
+                                var reply = data && data.candidates && data.candidates[0] && data.candidates[0].content &&
+                                    data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+                                var cleaned = cleanAiReplyText(reply);
+                                if (!cleaned) throw new Error('Respon Gemini kosong');
+                                return cleaned;
+                            });
+                        });
+                    }
+
+                    return fetch(spec.url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + apiKey
+                        },
+                        body: JSON.stringify({
+                            model: modelId,
+                            messages: [
+                                { role: 'system', content: systemPrompt },
+                                { role: 'user', content: userText }
+                            ],
+                            temperature: 0.6,
+                            max_tokens: 650
+                        })
+                    }).then(function(res) {
+                        return res.json().catch(function() { return {}; }).then(function(data) {
+                            var errMsg = (data && data.error && data.error.message) || ('HTTP ' + res.status);
+                            if (!res.ok) {
+                                var err = new Error(errMsg);
+                                err.status = res.status;
+                                throw err;
+                            }
+                            var reply = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+                            var cleaned = cleanAiReplyText(reply);
+                            if (!cleaned) throw new Error('Respon ' + spec.label + ' kosong');
+                            return cleaned;
+                        });
+                    });
+                }
+
+                function requestAiProviderReply(userText) {
+                    var cfg = getSavedAiConfig();
+                    var spec = AI_PROVIDERS[cfg.provider] || AI_PROVIDERS.gemini;
+                    var t = readDashboardTelemetry();
+                    var systemPrompt =
+                        'Kamu adalah Asisten AI Greenhouse Hidroponik TeFa. Jawab ringkas, akurat, dan ramah dalam Bahasa Indonesia (maksimal 3 kalimat agar nyaman dibacakan suara). ' +
+                        'Data sensor saat ini: ' + t.sensorsSummary + '. Suhu air: ' + t.waterTemp + '. Suhu udara: ' + t.weatherTemp + ' (' + t.weatherDesc + ').';
+
+                    var cacheKey = cfg.provider + ':' + (cfg.preferQwenOnGroq ? 'q:' : '') + cfg.apiKey.slice(0, 14);
+                    var initialQueue = [];
+                    if (workingModelCache[cacheKey]) initialQueue.push(workingModelCache[cacheKey]);
+                    var defaults = spec.models.slice();
+                    if (cfg.preferQwenOnGroq) {
+                        defaults.sort(function(a, b) {
+                            return (/qwen/i.test(a) ? 0 : 1) - (/qwen/i.test(b) ? 0 : 1);
+                        });
+                    }
+                    for (var i = 0; i < defaults.length; i++) {
+                        if (initialQueue.indexOf(defaults[i]) === -1) initialQueue.push(defaults[i]);
+                    }
+
+                    var tried = {};
+                    var discovered = false;
+
+                    function tryNext(queue) {
+                        if (!queue.length) {
+                            return Promise.reject(new Error('Tidak ada model aktif yang tersedia untuk API key ini'));
+                        }
+                        var modelId = queue.shift();
+                        if (tried[modelId]) return tryNext(queue);
+                        tried[modelId] = true;
+
+                        return callSingleModel(spec, cfg.apiKey, modelId, systemPrompt, userText).then(function(reply) {
+                            workingModelCache[cacheKey] = modelId;
+                            return reply;
+                        }).catch(function(err) {
+                            var msg = err && err.message ? err.message : '';
+                            var status = err && err.status ? err.status : 0;
+                            if (!isModelUnavailableError(status, msg)) {
+                                throw err;
+                            }
+                            if (discovered) {
+                                return queue.length ? tryNext(queue) : Promise.reject(err);
+                            }
+                            discovered = true;
+                            return discoverChatModels(cfg.provider, spec, cfg.apiKey, cfg.preferQwenOnGroq).then(function(liveModels) {
+                                if (!liveModels.length && !queue.length) throw err;
+                                var merged = [];
+                                for (var m = 0; m < liveModels.length; m++) {
+                                    if (!tried[liveModels[m]] && merged.indexOf(liveModels[m]) === -1) merged.push(liveModels[m]);
+                                }
+                                for (var q = 0; q < queue.length; q++) {
+                                    if (!tried[queue[q]] && merged.indexOf(queue[q]) === -1) merged.push(queue[q]);
+                                }
+                                if (!merged.length) throw err;
+                                return tryNext(merged);
+                            });
+                        });
+                    }
+
+                    return tryNext(initialQueue);
+                }
+
+                function sendMessage(customText, options) {
+                    if (!aiInput || !aiMessages) return;
+                    var opts = options || {};
+                    var text = (typeof customText === 'string' ? customText : aiInput.value).trim();
+                    if (!text) return;
+
+                    var userMsg = document.createElement('div');
+                    userMsg.className = 'ai-msg-user';
+                    userMsg.textContent = text;
+                    aiMessages.appendChild(userMsg);
+
+                    if (typeof customText !== 'string') {
+                        aiInput.value = '';
+                    }
+                    aiMessages.scrollTop = aiMessages.scrollHeight;
+
+                    var shouldSpeak = Boolean(opts.fromVoice || ttsEnabled);
+                    var cfg = getSavedAiConfig();
+                    if (!cfg.apiKey) {
+                        setTimeout(function() {
+                            var replyText = generateAiReply(text);
+                            if (voicePanel && voicePanel.classList.contains('open')) {
+                                setOrbTranscript(replyText, true);
+                            }
+                            appendBotMessage(replyText, shouldSpeak);
+                        }, 350);
+                        return;
+                    }
+
+                    var spec = AI_PROVIDERS[cfg.provider] || AI_PROVIDERS.gemini;
+                    if (voicePanel && voicePanel.classList.contains('open')) {
+                        setOrbStatus('Menghubungkan ke ' + spec.label + '...', '');
+                    }
+
+                    var pendingBubble = document.createElement('div');
+                    pendingBubble.className = 'ai-msg-bot';
+                    pendingBubble.innerHTML = '<div class="ai-msg-bot-head"><div class="ai-badge-label">AI · ' + spec.label + '</div></div><div class="ai-msg-text">Sedang memproses...</div>';
+                    aiMessages.appendChild(pendingBubble);
+                    aiMessages.scrollTop = aiMessages.scrollHeight;
+
+                    requestAiProviderReply(text).then(function(replyText) {
+                        if (pendingBubble.parentNode) pendingBubble.parentNode.removeChild(pendingBubble);
+                        if (voicePanel && voicePanel.classList.contains('open')) {
+                            setOrbTranscript(replyText, true);
+                            if (!shouldSpeak) setOrbStatus('Ketuk Orb untuk Bicara', '');
+                        }
+                        appendBotMessage(replyText, shouldSpeak);
+                    }).catch(function(err) {
+                        if (pendingBubble.parentNode) pendingBubble.parentNode.removeChild(pendingBubble);
+                        var fallback = 'Gagal terhubung ke ' + spec.label + ' (' + (err && err.message ? err.message : 'Error') + '). ' + generateAiReply(text);
+                        if (voicePanel && voicePanel.classList.contains('open')) {
+                            setOrbTranscript(fallback, true);
+                            if (!shouldSpeak) setOrbStatus('Ketuk Orb untuk Bicara', '');
+                        }
+                        appendBotMessage(fallback, shouldSpeak);
+                    });
+                }
+
+                function stopListening() {
+                    isListening = false;
+                    updateMicButtonsUI(false);
+                    stopMicAnalyser();
+                    if (recognition) {
+                        try {
+                            recognition.stop();
+                        } catch (err) {
+                            // ignore already-stopped recognition errors
+                        }
+                    }
+                    if (!isSpeaking) {
+                        orbMode = 'idle';
+                        setOrbStatus('Ketuk Orb untuk Bicara', '');
+                    }
+                }
+
+                function startListening() {
+                    var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    if (!SpeechRec) {
+                        openVoiceOrb();
+                        setOrbStatus('Mikrofon Tidak Didukung', '');
+                        setOrbTranscript('Browser ini belum mendukung Speech-to-Text (gunakan Chrome atau Edge terbaru via HTTPS/localhost).', false);
+                        return;
+                    }
+
+                    if (isListening) {
+                        stopListening();
+                        return;
+                    }
+
+                    stopSpeaking();
+                    openVoiceOrb();
+
+                    recognition = new SpeechRec();
+                    recognition.lang = 'id-ID';
+                    recognition.interimResults = true;
+                    recognition.continuous = false;
+                    latestTranscript = '';
+
+                    recognition.onstart = function() {
+                        isListening = true;
+                        orbMode = 'listening';
+                        updateMicButtonsUI(true);
+                        setOrbStatus('Mendengarkan...', 'is-listening');
+                        setOrbTranscript('Silakan bicara sekarang...', false);
+                        startMicAnalyser();
+                    };
+
+                    recognition.onresult = function(event) {
+                        var interim = '';
+                        var finalStr = '';
+                        for (var i = event.resultIndex; i < event.results.length; i++) {
+                            var transcriptPart = event.results[i][0].transcript;
+                            if (event.results[i].isFinal) {
+                                finalStr += transcriptPart;
+                            } else {
+                                interim += transcriptPart;
+                            }
+                        }
+
+                        var combined = (finalStr || interim).trim();
+                        if (combined) {
+                            latestTranscript = combined;
+                            speechPulse = 1.0;
+                            setOrbTranscript(combined, true);
+                        }
+
+                        if (finalStr && finalStr.trim()) {
+                            var question = finalStr.trim();
+                            latestTranscript = '';
+                            isListening = false;
+                            updateMicButtonsUI(false);
+                            stopMicAnalyser();
+                            setOrbStatus('Memproses jawaban...', '');
+                            sendMessage(question, { fromVoice: true });
+                        }
+                    };
+
+                    recognition.onerror = function(event) {
+                        isListening = false;
+                        updateMicButtonsUI(false);
+                        stopMicAnalyser();
+                        if (!isSpeaking) orbMode = 'idle';
+                        if (event && event.error === 'not-allowed') {
+                            setOrbStatus('Izin Mikrofon Ditolak', '');
+                            setOrbTranscript('Izinkan akses mikrofon di browser agar dapat bertanya lewat suara.', false);
+                        } else if (event && event.error === 'no-speech') {
+                            setOrbStatus('Ketuk Orb untuk Bicara', '');
+                            setOrbTranscript('Tidak ada suara terdeteksi. Ketuk orb dan coba bicara lagi.', false);
+                        } else {
+                            setOrbStatus('Ketuk Orb untuk Bicara', '');
+                        }
+                    };
+
+                    recognition.onend = function() {
+                        var pending = latestTranscript.trim();
+                        isListening = false;
+                        updateMicButtonsUI(false);
+                        stopMicAnalyser();
+                        if (pending) {
+                            latestTranscript = '';
+                            setOrbStatus('Memproses jawaban...', '');
+                            sendMessage(pending, { fromVoice: true });
+                        } else if (!isSpeaking) {
+                            orbMode = 'idle';
+                            setOrbStatus('Ketuk Orb untuk Bicara', '');
+                        }
+                    };
+
+                    try {
+                        recognition.start();
+                    } catch (err) {
+                        isListening = false;
+                        updateMicButtonsUI(false);
+                        stopMicAnalyser();
+                        setOrbStatus('Ketuk Orb untuk Bicara', '');
+                    }
+                }
 
                 function openPopup() {
                     // Tutup modal lain agar tidak saling menumpuk
@@ -478,17 +1466,25 @@
 
                 function closePopup() {
                     if (!aiPopup.classList.contains('open') || aiPopup.classList.contains('closing')) return;
+                    stopListening();
+                    stopSpeaking();
                     aiPopup.classList.add('closing');
                     setTimeout(function() {
                         aiPopup.classList.remove('open');
                         aiPopup.classList.remove('closing');
-                        aiBtn.classList.remove('hidden');
+                        if (!voicePanel || !voicePanel.classList.contains('open')) {
+                            aiBtn.classList.remove('hidden');
+                        }
                     }, 320);
                 }
 
+                updateTtsToggleUI();
+
                 aiBtn.addEventListener('click', function(e) {
                     e.stopPropagation();
-                    if (aiPopup.classList.contains('open') && !aiPopup.classList.contains('closing')) {
+                    if (voicePanel && voicePanel.classList.contains('open')) {
+                        closeVoiceOrb(false);
+                    } else if (aiPopup.classList.contains('open') && !aiPopup.classList.contains('closing')) {
                         closePopup();
                     } else {
                         openPopup();
@@ -506,66 +1502,151 @@
                     e.stopPropagation();
                 });
 
+                if (voicePanel) {
+                    voicePanel.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                    });
+                }
+
+                attachPanelDrag(orbTrigger, true);
+                attachPanelDrag(orbTopbar, false);
+
+                if (orbResizeHandle && voicePanel) {
+                    orbResizeHandle.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                    });
+                    orbResizeHandle.addEventListener('pointerdown', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var startX = e.clientX;
+                        var startY = e.clientY;
+                        var startSize = orbCanvas ? orbCanvas.getBoundingClientRect().width : currentOrbSize;
+                        voicePanel.classList.add('is-resizing');
+
+                        function onResizeMove(ev) {
+                            var delta = ((ev.clientX - startX) + (ev.clientY - startY)) * 0.85;
+                            setOrbSize(startSize + delta);
+                        }
+
+                        function onResizeUp() {
+                            window.removeEventListener('pointermove', onResizeMove);
+                            window.removeEventListener('pointerup', onResizeUp);
+                            window.removeEventListener('pointercancel', onResizeUp);
+                            voicePanel.classList.remove('is-resizing');
+                        }
+
+                        window.addEventListener('pointermove', onResizeMove);
+                        window.addEventListener('pointerup', onResizeUp);
+                        window.addEventListener('pointercancel', onResizeUp);
+                    });
+                }
+
+                if (orbSizeDownBtn) {
+                    orbSizeDownBtn.addEventListener('click', function() {
+                        setOrbSize(currentOrbSize - 30);
+                    });
+                }
+
+                if (orbSizeUpBtn) {
+                    orbSizeUpBtn.addEventListener('click', function() {
+                        setOrbSize(currentOrbSize + 30);
+                    });
+                }
+
+                window.addEventListener('resize', function() {
+                    if (voicePanel && voicePanel.classList.contains('open')) {
+                        setOrbSize(currentOrbSize);
+                    }
+                });
+
                 document.addEventListener('click', function(e) {
-                    if (aiPopup.classList.contains('open') && !aiPopup.contains(e.target) && !aiBtn.contains(e.target)) {
+                    if (aiPopup.classList.contains('open') && !aiPopup.contains(e.target) && !aiBtn.contains(e.target) && (!voicePanel || !voicePanel.contains(e.target))) {
                         closePopup();
                     }
                 });
 
                 document.addEventListener('keydown', function(e) {
-                    if (e.key === 'Escape' && aiPopup.classList.contains('open')) {
-                        closePopup();
+                    if (e.key === 'Escape') {
+                        if (voicePanel && voicePanel.classList.contains('open')) {
+                            closeVoiceOrb(false);
+                        } else if (aiPopup.classList.contains('open')) {
+                            closePopup();
+                        }
                     }
                 });
 
                 if (aiClear && aiMessages) {
                     aiClear.addEventListener('click', function() {
+                        stopSpeaking();
+                        stopListening();
                         aiMessages.innerHTML = '';
+                        setOrbTranscript(DEFAULT_ORB_HINT, false);
                     });
                 }
 
-                function sendMessage() {
-                    if (!aiInput || !aiMessages) return;
-                    var text = aiInput.value.trim();
-                    if (!text) return;
+                if (aiBtnTtsToggle) {
+                    aiBtnTtsToggle.addEventListener('click', function() {
+                        ttsEnabled = !ttsEnabled;
+                        if (!ttsEnabled) stopSpeaking();
+                        updateTtsToggleUI();
+                    });
+                }
 
-                    var userMsg = document.createElement('div');
-                    userMsg.className = 'ai-msg-user';
-                    userMsg.textContent = text;
-                    aiMessages.appendChild(userMsg);
-
-                    aiInput.value = '';
-                    aiMessages.scrollTop = aiMessages.scrollHeight;
-
-                    setTimeout(function() {
-                        var botMsg = document.createElement('div');
-                        botMsg.className = 'ai-msg-bot';
-                        
-                        var badge = document.createElement('div');
-                        badge.className = 'ai-badge-label';
-                        badge.textContent = 'AI';
-                        
-                        var msgText = document.createElement('div');
-                        msgText.className = 'ai-msg-text';
-
-                        var lower = text.toLowerCase();
-                        if (lower.includes('status') || lower.includes('sensor')) {
-                            msgText.textContent = 'Status sistem: Seluruh sensor saat ini dalam status Terputus (N/A). Data otomatis diperbarui bila ESP32 tersambung.';
-                        } else if (lower.includes('hai') || lower.includes('halo')) {
-                            msgText.textContent = 'HAI JUGA! Ada yang bisa saya bantu terkait monitoring greenhouse hidroponik?';
+                if (aiBtnVoiceOrb) {
+                    aiBtnVoiceOrb.addEventListener('click', function() {
+                        if (voicePanel && voicePanel.classList.contains('open')) {
+                            closeVoiceOrb(false);
                         } else {
-                            msgText.textContent = 'Sistem mencatat input: "' + text + '". Sensor saat ini N/A, telemetri otomatis akan aktif saat data live diterima.';
+                            openVoiceOrb();
                         }
+                    });
+                }
 
-                        botMsg.appendChild(badge);
-                        botMsg.appendChild(msgText);
-                        aiMessages.appendChild(botMsg);
-                        aiMessages.scrollTop = aiMessages.scrollHeight;
-                    }, 450);
+                if (orbBackBtn) {
+                    orbBackBtn.addEventListener('click', function() {
+                        closeVoiceOrb(true);
+                    });
+                }
+
+                if (orbCloseBtn) {
+                    orbCloseBtn.addEventListener('click', function() {
+                        closeVoiceOrb(false);
+                    });
+                }
+
+                if (orbMicBtn) {
+                    orbMicBtn.addEventListener('click', startListening);
+                }
+
+                if (orbTrigger) {
+                    orbTrigger.addEventListener('click', function(e) {
+                        if (orbResizeHandle && (e.target === orbResizeHandle || orbResizeHandle.contains(e.target))) return;
+                        if (suppressOrbClick) {
+                            suppressOrbClick = false;
+                            return;
+                        }
+                        startListening();
+                    });
+                    orbTrigger.addEventListener('wheel', function(e) {
+                        e.preventDefault();
+                        setOrbSize(currentOrbSize + (e.deltaY < 0 ? 22 : -22));
+                    }, { passive: false });
+                    orbTrigger.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            startListening();
+                        }
+                    });
+                }
+
+                if (aiBtnMic) {
+                    aiBtnMic.addEventListener('click', startListening);
                 }
 
                 if (aiSend) {
-                    aiSend.addEventListener('click', sendMessage);
+                    aiSend.addEventListener('click', function() {
+                        sendMessage();
+                    });
                 }
 
                 if (aiInput) {

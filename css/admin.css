@@ -1643,6 +1643,359 @@
             fill: currentColor;
         }
 
+        /* Header TTS & Voice Orb Buttons */
+        .ai-btn-icon {
+            width: 33px;
+            height: 33px;
+            border-radius: 8px;
+            background: #EBF0ED;
+            border: 1px solid transparent;
+            color: #123522;
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+            padding: 0;
+            transition: all .2s ease;
+        }
+
+        .ai-btn-icon svg {
+            width: 17px;
+            height: 17px;
+            display: block;
+        }
+
+        .ai-btn-icon:hover {
+            background: #D8E2DC;
+            color: #0D2818;
+        }
+
+        .ai-btn-icon.active {
+            background: #DDF0E4;
+            border-color: #9CC5AC;
+            color: #123522;
+        }
+
+        .ai-btn-icon.voice-active {
+            background: #0B1911;
+            border-color: #0B1911;
+            color: #FFFFFF;
+            box-shadow: 0 2px 10px rgba(13, 40, 24, .22);
+        }
+
+        /* Footer Microphone Button */
+        .ai-btn-mic {
+            width: 48px;
+            height: 48px;
+            border-radius: 8px;
+            background: #EBF0ED;
+            border: 1px solid rgba(27, 67, 50, .18);
+            color: #123522;
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: all .2s ease;
+            padding: 0;
+        }
+
+        .ai-btn-mic svg {
+            width: 19px;
+            height: 19px;
+            display: block;
+        }
+
+        .ai-btn-mic:hover {
+            background: #D8E2DC;
+            color: #0D2818;
+        }
+
+        .ai-btn-mic.listening {
+            background: #0D2818;
+            border-color: #0D2818;
+            color: #FFFFFF;
+            box-shadow: 0 0 0 4px rgba(27, 67, 50, .2);
+            animation: aiMicPulse 1.4s ease-in-out infinite;
+        }
+
+        @keyframes aiMicPulse {
+            0%, 100% {
+                box-shadow: 0 0 0 2px rgba(27, 67, 50, .18);
+            }
+            50% {
+                box-shadow: 0 0 0 6px rgba(27, 67, 50, .32);
+            }
+        }
+
+        /* Per-Message Bot TTS Action Row */
+        .ai-msg-bot-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 5px;
+        }
+
+        .ai-msg-bot-head .ai-badge-label {
+            margin-bottom: 0;
+        }
+
+        .ai-msg-speak-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 9px;
+            border-radius: 999px;
+            border: 1px solid rgba(27, 67, 50, .16);
+            background: #F4F7F5;
+            color: #1B4332;
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all .2s ease;
+        }
+
+        .ai-msg-speak-btn svg {
+            width: 12px;
+            height: 12px;
+            display: block;
+        }
+
+        .ai-msg-speak-btn:hover {
+            background: #E2EBE5;
+            border-color: #9CC5AC;
+        }
+
+        .ai-msg-speak-btn.speaking {
+            background: #123522;
+            border-color: #123522;
+            color: #FFFFFF;
+        }
+
+        /* Interactive Halftone Voice Orb Centered Viewport Overlay (Movable & Resizable, Transparent Backdrop) */
+        .ai-voice-orb-panel {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            width: max-content;
+            max-width: calc(100vw - 16px);
+            background: transparent;
+            z-index: 2100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            padding: 8px;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transform: translate(-50%, -50%) scale(0.95);
+            transition: opacity .24s ease, transform .24s ease, visibility .24s ease;
+        }
+
+        .ai-voice-orb-panel.open {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .ai-voice-orb-panel.has-custom-pos {
+            transform: scale(0.95);
+        }
+
+        .ai-voice-orb-panel.open.has-custom-pos {
+            transform: scale(1);
+        }
+
+        .ai-voice-orb-panel.is-dragging,
+        .ai-voice-orb-panel.is-resizing {
+            transition: none;
+        }
+
+        .ai-voice-orb-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            padding: 8px 14px;
+            gap: 12px;
+            border-radius: 999px;
+            background: rgba(11, 18, 14, 0.84);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+            cursor: grab;
+            touch-action: none;
+            user-select: none;
+        }
+
+        .ai-voice-orb-panel.is-dragging .ai-voice-orb-topbar {
+            cursor: grabbing;
+        }
+
+        .ai-voice-orb-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .12);
+            color: #E2E6E4;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: .2px;
+        }
+
+        .ai-voice-orb-badge::before {
+            content: '';
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #8B938E;
+            transition: background .2s ease, box-shadow .2s ease;
+        }
+
+        .ai-voice-orb-panel.is-listening .ai-voice-orb-badge {
+            color: #FFFFFF;
+            border-color: rgba(255, 255, 255, .28);
+            background: rgba(255, 255, 255, .14);
+        }
+
+        .ai-voice-orb-panel.is-listening .ai-voice-orb-badge::before {
+            background: #FFFFFF;
+            box-shadow: 0 0 8px rgba(255, 255, 255, .95);
+        }
+
+        .ai-voice-orb-panel.is-speaking .ai-voice-orb-badge {
+            color: #DDF7E8;
+            border-color: rgba(156, 197, 172, .35);
+            background: rgba(45, 106, 79, .34);
+        }
+
+        .ai-voice-orb-panel.is-speaking .ai-voice-orb-badge::before {
+            background: #74E3A8;
+            box-shadow: 0 0 8px rgba(116, 227, 168, .9);
+        }
+
+        .ai-voice-orb-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ai-orb-ctrl-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, .16);
+            background: rgba(255, 255, 255, .08);
+            color: #E4E8E6;
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+            padding: 0;
+            transition: all .2s ease;
+        }
+
+        .ai-orb-ctrl-btn svg {
+            width: 17px;
+            height: 17px;
+            display: block;
+        }
+
+        .ai-orb-ctrl-btn:hover {
+            background: rgba(255, 255, 255, .2);
+            color: #FFFFFF;
+        }
+
+        .ai-orb-ctrl-btn.active {
+            background: #FFFFFF;
+            border-color: #FFFFFF;
+            color: #000000;
+            box-shadow: 0 0 18px rgba(255, 255, 255, .35);
+        }
+
+        .ai-voice-orb-stage {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            user-select: none;
+            border-radius: 50%;
+            padding: 4px;
+            touch-action: none;
+        }
+
+        .ai-voice-orb-panel.is-dragging .ai-voice-orb-stage {
+            cursor: grabbing;
+        }
+
+        .ai-voice-orb-stage canvas {
+            width: 380px;
+            height: 380px;
+            display: block;
+            border-radius: 50%;
+            filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.34));
+            transition: transform .22s ease;
+        }
+
+        .ai-voice-orb-stage:hover canvas {
+            transform: scale(1.02);
+        }
+
+        .ai-voice-orb-stage:active canvas {
+            transform: scale(0.99);
+        }
+
+        .ai-voice-orb-panel.is-dragging .ai-voice-orb-stage canvas,
+        .ai-voice-orb-panel.is-resizing .ai-voice-orb-stage canvas {
+            transform: none;
+        }
+
+        .ai-orb-resize-handle {
+            position: absolute;
+            right: 12%;
+            bottom: 12%;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.24);
+            background: rgba(11, 18, 14, 0.84);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            color: #E4E8E6;
+            display: grid;
+            place-items: center;
+            cursor: nwse-resize;
+            touch-action: none;
+            padding: 0;
+            opacity: 0.72;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
+            transition: opacity .2s ease, transform .2s ease, background .2s ease;
+            z-index: 2;
+        }
+
+        .ai-orb-resize-handle svg {
+            width: 14px;
+            height: 14px;
+            display: block;
+        }
+
+        .ai-voice-orb-stage:hover .ai-orb-resize-handle,
+        .ai-orb-resize-handle:hover,
+        .ai-voice-orb-panel.is-resizing .ai-orb-resize-handle {
+            opacity: 1;
+            transform: scale(1.08);
+            background: #123522;
+            border-color: rgba(255, 255, 255, 0.45);
+            color: #FFFFFF;
+        }
+
         @media(max-width: 680px) {
             .ai-assistant-btn {
                 right: 16px;
@@ -1662,8 +2015,24 @@
             .ai-chat-header h3 {
                 font-size: 20px;
             }
+            .ai-header-actions {
+                gap: 8px;
+            }
+            .ai-btn-clear {
+                padding: 0 10px;
+                font-size: 12px;
+            }
             .ai-chat-footer {
                 padding: 14px 18px 18px;
+                gap: 8px;
+            }
+            .ai-voice-orb-panel {
+                gap: 10px;
+                padding: 6px;
+            }
+            .ai-voice-orb-stage canvas {
+                width: 290px;
+                height: 290px;
             }
         }
 
@@ -1873,6 +2242,24 @@
             color: #0D2818;
             letter-spacing: -.2px;
             margin: 0;
+        }
+
+        .setting-ai-row {
+            display: grid;
+            grid-template-columns: 185px minmax(0, 1fr);
+            gap: 12px;
+            align-items: end;
+        }
+
+        .setting-ai-provider-field,
+        .setting-ai-key-field {
+            min-width: 0;
+        }
+
+        @media(max-width: 560px) {
+            .setting-ai-row {
+                grid-template-columns: 1fr;
+            }
         }
 
         .setting-select-wrap {
