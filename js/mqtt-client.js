@@ -571,7 +571,21 @@
         var pts = rangeResult.points;
         chartState.displayedPoints = pts;
 
-        if (pts.length === 0) return;
+        if (pts.length === 0) {
+            if (chartEmpty) chartEmpty.style.display = '';
+            if (chartState.animFrameId) {
+                cancelAnimationFrame(chartState.animFrameId);
+                chartState.animFrameId = null;
+            }
+            if (chartState.paths && chartState.paths.ec) {
+                chartState.paths.ec.setAttribute('d', '');
+                chartState.paths.area.setAttribute('d', '');
+                chartState.paths.ph.setAttribute('d', '');
+                chartState.paths.temp.setAttribute('d', '');
+            }
+            chartState.currPoints = null;
+            return;
+        }
 
         if (chartEmpty) chartEmpty.style.display = 'none';
         ensureChartInteractive(chartBox, svg);
@@ -1150,7 +1164,7 @@
     }
 
     function fetchSupabaseRows(table, limit) {
-        if (typeof fetch !== 'function' || !SUPABASE_CONFIG.anonKey) return Promise.resolve([]);
+        if (typeof fetch !== 'function' || !SUPABASE_CONFIG.anonKey) return Promise.resolve(null);
         var url = SUPABASE_CONFIG.url + '/' + table + '?select=*&order=waktu.desc&limit=' + (limit || 200);
         return fetch(url, {
             method: 'GET',
@@ -1161,13 +1175,13 @@
             if (!res.ok) {
                 return res.text().then(function (txt) {
                     console.warn('[TeFa Supabase] Gagal muat ' + table + ' (' + res.status + '):', txt);
-                    return [];
+                    return null;
                 });
             }
             return res.json();
         }).catch(function (err) {
             console.warn('[TeFa Supabase] Error muat ' + table + ':', err);
-            return [];
+            return null;
         });
     }
 
@@ -1259,16 +1273,31 @@
         };
     }
 
+    var lastSupabaseSyncAt = 0;
+    var supabaseSyncInFlight = false;
+
+    function refreshHistoryFromSupabase(force) {
+        var now = Date.now();
+        if (supabaseSyncInFlight) return;
+        if (!force && (now - lastSupabaseSyncAt) < 2000) return;
+        loadHistoryFromSupabase();
+    }
+
     function loadHistoryFromSupabase() {
+        supabaseSyncInFlight = true;
         Promise.all([
-            fetchSupabaseRows(SUPABASE_CONFIG.sensorTable, 200),
+            fetchSupabaseRows(SUPABASE_CONFIG.sensorTable, 1000),
             fetchSupabaseRows(SUPABASE_CONFIG.awsTable, 500)
         ]).then(function (results) {
-            var sensorRows = Array.isArray(results[0]) ? results[0] : [];
-            var awsRows = Array.isArray(results[1]) ? results[1] : [];
+            supabaseSyncInFlight = false;
+            lastSupabaseSyncAt = Date.now();
+            var sensorOk = Array.isArray(results[0]);
+            var awsOk = Array.isArray(results[1]);
+            var sensorRows = sensorOk ? results[0] : [];
+            var awsRows = awsOk ? results[1] : [];
             var thr = getThresholds();
 
-            if (sensorRows.length > 0 && typeof window.setSensorHistoryData === 'function') {
+            if (sensorOk && typeof window.setSensorHistoryData === 'function') {
                 var mappedSensor = sensorRows.map(function (r) {
                     var phVal = toSensorNumber(r.PH);
                     var ppmVal = toSensorNumber(r.PPM);
@@ -1384,8 +1413,8 @@
                 ));
             }
 
-            if (telemetryLog.length === 0 && sensorRows.length > 0) {
-                telemetryLog = sensorRows.slice().reverse().map(function (r) {
+            if (sensorOk) {
+                telemetryLog = sensorRows.map(function (r) {
                     var ts = r.waktu ? new Date(r.waktu).getTime() : Date.now();
                     if (isNaN(ts)) ts = Date.now();
                     return {
@@ -1398,10 +1427,18 @@
                         airHum: null,
                         light: toSensorNumber(r.cahaya) || 0
                     };
+                }).sort(function (a, b) {
+                    return a.ts - b.ts;
                 });
                 saveTelemetryLog();
                 renderTelemetryChart();
+
+                if (telemetryHistory.length === 0 && telemetryLog.length > 0) {
+                    telemetryHistory = telemetryLog.slice(-15);
+                }
             }
+        }).catch(function () {
+            supabaseSyncInFlight = false;
         });
     }
 
@@ -1817,9 +1854,10 @@
         if (rangeTabs) {
             rangeTabs.addEventListener('click', function (e) {
                 if (e.target.tagName !== 'BUTTON') return;
-                // Tunggu kelas .on berpindah lalu re-render grafik
+                // Tunggu kelas .on berpindah lalu re-render grafik & sinkronkan dengan database
                 setTimeout(function () {
                     renderTelemetryChart();
+                    refreshHistoryFromSupabase(false);
                 }, 0);
             });
         }
@@ -1855,6 +1893,9 @@
         loadSavedMqttConfig();
         initChartControls();
         loadHistoryFromSupabase();
+        setInterval(function () {
+            refreshHistoryFromSupabase(true);
+        }, 15000);
         initMqttClient();
 
         window.addEventListener('storage', function (e) {
