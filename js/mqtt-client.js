@@ -132,19 +132,48 @@
         }
     }
 
-    function formatShortDate(ts) {
+    function getWibDateParts(ts) {
         var d = new Date(ts);
-        var dd = String(d.getDate()).padStart(2, '0');
-        var mm = String(d.getMonth() + 1).padStart(2, '0');
-        return dd + '/' + mm;
+        if (isNaN(d.getTime())) d = new Date();
+        try {
+            var parts = new Intl.DateTimeFormat('en-GB', {
+                timeZone: 'Asia/Jakarta',
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            }).formatToParts(d);
+            var map = {};
+            parts.forEach(function (p) { map[p.type] = p.value; });
+            return {
+                dd: map.day || '01',
+                mm: map.month || '01',
+                hh: map.hour === '24' ? '00' : (map.hour || '00'),
+                mi: map.minute || '00',
+                ss: map.second || '00'
+            };
+        } catch (e) {
+            var wib = new Date(d.getTime() + 7 * 3600 * 1000);
+            return {
+                dd: String(wib.getUTCDate()).padStart(2, '0'),
+                mm: String(wib.getUTCMonth() + 1).padStart(2, '0'),
+                hh: String(wib.getUTCHours()).padStart(2, '0'),
+                mi: String(wib.getUTCMinutes()).padStart(2, '0'),
+                ss: String(wib.getUTCSeconds()).padStart(2, '0')
+            };
+        }
+    }
+
+    function formatShortDate(ts) {
+        var p = getWibDateParts(ts);
+        return p.dd + '/' + p.mm;
     }
 
     function formatClock(ts, withSec) {
-        var d = new Date(ts);
-        var hh = String(d.getHours()).padStart(2, '0');
-        var mi = String(d.getMinutes()).padStart(2, '0');
-        var ss = String(d.getSeconds()).padStart(2, '0');
-        return withSec ? (hh + ':' + mi + ':' + ss) : (hh + ':' + mi);
+        var p = getWibDateParts(ts);
+        return withSec ? (p.hh + ':' + p.mi + ':' + p.ss) : (p.hh + ':' + p.mi);
     }
 
     function getActiveRangeFromDOM() {
@@ -214,32 +243,36 @@
         filtered.forEach(function (p) {
             var bKey = Math.floor(p.ts / bucketMs) * bucketMs;
             if (!buckets[bKey]) {
-                buckets[bKey] = { sumPh: 0, sumEc: 0, sumTemp: 0, count: 0, ts: bKey, lastTime: p.time };
+                buckets[bKey] = { sumPh: 0, sumEc: 0, sumTemp: 0, count: 0, ts: bKey, lastTs: p.ts, lastTime: p.time };
                 order.push(bKey);
             }
             buckets[bKey].sumPh += (p.ph || 0);
             buckets[bKey].sumEc += (p.ec || 0);
             buckets[bKey].sumTemp += (p.waterTemp || 0);
             buckets[bKey].count += 1;
-            buckets[bKey].lastTime = p.time;
+            if (p.ts >= buckets[bKey].lastTs) {
+                buckets[bKey].lastTs = p.ts;
+                buckets[bKey].lastTime = p.time;
+            }
         });
 
         var agg = order.slice(-35).map(function (k) {
             var b = buckets[k];
+            var refTs = b.lastTs || b.ts;
             var axisLbl = '';
             var fullTime = '';
             if (rangeKey === '24J') {
-                axisLbl = span < 2 * 60 * 1000 ? formatClock(b.ts, true) : formatClock(b.ts, false);
-                fullTime = formatClock(b.ts, true);
+                axisLbl = span < 2 * 60 * 1000 ? formatClock(refTs, true) : formatClock(refTs, false);
+                fullTime = formatClock(refTs, true);
             } else if (rangeKey === '7H') {
-                axisLbl = formatShortDate(b.ts) + ' ' + formatClock(b.ts, false);
-                fullTime = formatShortDate(b.ts) + ' · ' + formatClock(b.ts, false);
+                axisLbl = formatShortDate(refTs) + ' ' + formatClock(refTs, false);
+                fullTime = formatShortDate(refTs) + ' · ' + formatClock(refTs, false);
             } else {
-                axisLbl = span > 48 * 3600 * 1000 ? formatShortDate(b.ts) : (formatShortDate(b.ts) + ' ' + formatClock(b.ts, false));
-                fullTime = formatShortDate(b.ts) + ' · ' + formatClock(b.ts, false);
+                axisLbl = span > 48 * 3600 * 1000 ? formatShortDate(refTs) : (formatShortDate(refTs) + ' ' + formatClock(refTs, false));
+                fullTime = formatShortDate(refTs) + ' · ' + formatClock(refTs, false);
             }
             return {
-                ts: b.ts,
+                ts: refTs,
                 time: fullTime,
                 axisLabel: axisLbl,
                 ph: b.sumPh / b.count,
@@ -257,6 +290,8 @@
         style.id = 'tefa-live-chart-styles';
         style.textContent = [
             '#telemetri .chartbox { position: relative; cursor: crosshair; }',
+            '#telemetri .xax { position: relative; display: block; height: 22px; padding-top: 0; }',
+            '#telemetri .xax span { position: absolute; top: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }',
             '#telemetri .legend span { cursor: pointer; user-select: none; transition: opacity 0.2s ease; }',
             '#telemetri .legend span.dimmed { opacity: 0.35; text-decoration: line-through; }',
             '.chart-hover-layer { position: absolute; pointer-events: none; z-index: 5; overflow: visible; }',
@@ -654,13 +689,42 @@
             var spans = xax.querySelectorAll('span');
             if (n === 1) {
                 spans.forEach(function (sp, i) {
-                    sp.textContent = i === 2 ? pts[0].axisLabel : '';
+                    if (i === 0) {
+                        sp.textContent = pts[0].axisLabel;
+                        sp.style.display = '';
+                        sp.style.left = '50%';
+                        sp.style.transform = 'translateX(-50%)';
+                    } else {
+                        sp.textContent = '';
+                        sp.style.display = 'none';
+                    }
                 });
             } else {
-                var indices = [0, Math.floor((n - 1) * 0.25), Math.floor((n - 1) * 0.5), Math.floor((n - 1) * 0.75), n - 1];
-                indices.forEach(function (idx, i) {
-                    if (spans[i] && pts[idx]) {
-                        spans[i].textContent = pts[idx].axisLabel;
+                var rawIndices = n <= 5
+                    ? pts.map(function (_, idx) { return idx; })
+                    : [0, Math.round((n - 1) * 0.25), Math.round((n - 1) * 0.5), Math.round((n - 1) * 0.75), n - 1];
+                var indices = [];
+                rawIndices.forEach(function (idx) {
+                    if (indices.indexOf(idx) === -1) indices.push(idx);
+                });
+
+                spans.forEach(function (sp, i) {
+                    if (i < indices.length && pts[indices[i]]) {
+                        var idx = indices[i];
+                        var xPct = ((idx / (n - 1)) * 100).toFixed(3) + '%';
+                        sp.textContent = pts[idx].axisLabel;
+                        sp.style.display = '';
+                        sp.style.left = xPct;
+                        if (idx === 0) {
+                            sp.style.transform = 'translateX(0)';
+                        } else if (idx === n - 1) {
+                            sp.style.transform = 'translateX(-100%)';
+                        } else {
+                            sp.style.transform = 'translateX(-50%)';
+                        }
+                    } else {
+                        sp.textContent = '';
+                        sp.style.display = 'none';
                     }
                 });
             }
@@ -996,8 +1060,10 @@
         }
 
         // 6. Update Telemetry Chart & Log
+        var parsedPayloadTs = payload.timestamp ? new Date(payload.timestamp).getTime() : NaN;
+        var entryTs = !isNaN(parsedPayloadTs) ? parsedPayloadTs : Date.now();
         var logEntry = {
-            ts: Date.now(),
+            ts: entryTs,
             time: wibTime,
             ph: ph ? ph.value : 0,
             ec: ec ? ec.value : 0,
