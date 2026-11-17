@@ -2293,6 +2293,7 @@ h2.sec {
 
 /* Notification Button & Modal (notifikasi.svg) */
 .notif-btn {
+    position: relative;
     width: 62px;
     height: 62px;
     border-radius: 50%;
@@ -2666,6 +2667,42 @@ h2.sec {
     font-size: 12.5px;
     font-weight: 700;
     color: #0D2818;
+}
+
+.notif-card.is-warning {
+    border-left: 4px solid #E65100;
+}
+
+.notif-card.is-warning .notif-card-tag {
+    color: #E65100;
+}
+
+.notif-card.is-normal {
+    border-left: 4px solid #1B4332;
+}
+
+.notif-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #BC2225;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 6px rgba(188, 34, 37, 0.35);
+    pointer-events: none;
+}
+
+.notif-badge[hidden] {
+    display: none;
 }
 
 @media(max-width: 600px) {

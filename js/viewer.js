@@ -2040,8 +2040,29 @@
         var currentNotifPage = 1;
         var notifsPerPage = 3;
         var notifications = [];
+        var unreadCount = 0;
+
+        var badgeEl = notifBtn.querySelector('.notif-badge');
+        if (!badgeEl) {
+            badgeEl = document.createElement('span');
+            badgeEl.className = 'notif-badge';
+            badgeEl.hidden = true;
+            notifBtn.appendChild(badgeEl);
+        }
+
+        function updateBadge() {
+            if (!badgeEl) return;
+            if (unreadCount > 0) {
+                badgeEl.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+                badgeEl.hidden = false;
+            } else {
+                badgeEl.hidden = true;
+            }
+        }
 
         function openModal() {
+            unreadCount = 0;
+            updateBadge();
             // Tutup modal lain agar tidak saling menumpuk
             var setBackdrop = document.getElementById('settingModalBackdrop');
             var gearBtn = document.querySelector('.gear');
@@ -2181,8 +2202,9 @@
 
             var html = '';
             slice.forEach(function (item) {
+                var cardCls = item.type === 'warning' ? ' is-warning' : ' is-normal';
                 html += [
-                    '<div class="notif-card">',
+                    '<div class="notif-card' + cardCls + '">',
                     '  <div class="notif-card-header">',
                     '    <span class="notif-card-tag">' + item.tag + '</span>',
                     '    <span class="notif-card-time">' + item.time + '</span>',
@@ -2198,6 +2220,31 @@
             });
             listContainer.innerHTML = html;
         }
+
+        window.addSensorNotification = function (item) {
+            if (!item || typeof item !== 'object') return;
+            notifications.unshift(item);
+            if (notifications.length > 50) notifications.pop();
+            if (!backdrop.classList.contains('open') && item.type === 'warning') {
+                unreadCount++;
+                updateBadge();
+            }
+            if (backdrop.classList.contains('open')) {
+                currentNotifPage = 1;
+                renderList();
+            }
+        };
+
+        window.setSensorNotifications = function (items) {
+            notifications = Array.isArray(items) ? items.slice(0, 50) : [];
+            if (!backdrop.classList.contains('open')) {
+                unreadCount = notifications.filter(function (n) { return n.type === 'warning'; }).length;
+                updateBadge();
+            } else {
+                currentNotifPage = 1;
+                renderList();
+            }
+        };
     }
 
     function initAllWidgets() {

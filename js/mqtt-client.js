@@ -96,6 +96,7 @@
     var minAirTemp = null;
     var maxAirTemp = null;
     var lastDeviceStatus = null;
+    var lastNotifStatus = null;
     var telemetryHistory = []; // live short buffer for AWS bars
     var telemetryLog = loadTelemetryLog();
     var pendingSettingsPayload = null;
@@ -1000,7 +1001,7 @@
 
         renderTelemetryChart();
 
-        // 7. Tambah ke Tabel History Sensor (#hist)
+        // 7. Tambah ke Tabel History Sensor (#hist) & Notifikasi Sensor
         if (typeof window.addSensorHistoryRow === 'function') {
             window.addSensorHistoryRow({
                 time: wibTime,
@@ -1011,6 +1012,21 @@
                 hum: airHum ? (airHum.value.toFixed(1) + '%') : 'N/A',
                 status: overallStatus
             });
+        }
+        if (typeof window.addSensorNotification === 'function') {
+            var liveNotif = buildSensorNotificationItem(
+                ph ? ph.value : null,
+                ec ? ec.value : null,
+                waterTemp ? waterTemp.value : null,
+                airHum ? airHum.value : null,
+                thr,
+                wibTime + ' WIB',
+                overallStatus === 'Warning'
+            );
+            if (liveNotif.type === 'warning' || lastNotifStatus !== 'normal') {
+                window.addSensorNotification(liveNotif);
+            }
+            lastNotifStatus = liveNotif.type;
         }
 
         // 8. Update AWS (pakai data sensor yang sudah ada: AHT20 & BH1750)
@@ -1195,6 +1211,54 @@
         return isToday ? t : (formatShortDate(d.getTime()) + ' ' + t);
     }
 
+    function buildSensorNotificationItem(phVal, ecVal, wtVal, humVal, thr, timeText, forceWarn) {
+        var issues = [];
+        var details = [];
+        if (phVal !== null && (phVal < thr.phMin || phVal > thr.phMax)) {
+            issues.push('pH');
+            details.push('pH ' + phVal.toFixed(2) + ' (batas ' + thr.phMin + '–' + thr.phMax + ')');
+        }
+        if (wtVal !== null && (wtVal < thr.tempMin || wtVal > thr.tempMax)) {
+            issues.push('Suhu Air');
+            details.push('Suhu air ' + wtVal.toFixed(1) + '°C (batas ' + thr.tempMin + '–' + thr.tempMax + '°C)');
+        }
+        if (humVal !== null && (humVal < thr.humMin || humVal > thr.humMax)) {
+            issues.push('Kelembapan');
+            details.push('Kelembapan ' + humVal.toFixed(1) + '% (batas ' + thr.humMin + '–' + thr.humMax + '%)');
+        }
+
+        var parts = [];
+        if (phVal !== null) parts.push('pH: ' + phVal.toFixed(2));
+        if (ecVal !== null) parts.push('EC: ' + ecVal.toFixed(2) + ' mS/cm');
+        if (wtVal !== null) parts.push('Air: ' + wtVal.toFixed(1) + '°C');
+        if (humVal !== null) parts.push('RH: ' + humVal.toFixed(1) + '%');
+        var valSummary = parts.length ? parts.join(' · ') : 'N/A';
+
+        if (issues.length > 0 || forceWarn) {
+            return {
+                type: 'warning',
+                tag: 'PERINGATAN',
+                time: timeText,
+                title: issues.length > 0
+                    ? ('Peringatan: ' + issues.join(' & ') + ' di luar batas aman')
+                    : 'Peringatan Parameter Sensor',
+                desc: details.length > 0
+                    ? details.join(' · ')
+                    : 'Salah satu pembacaan sensor melewati ambang batas yang ditentukan.',
+                value: valSummary
+            };
+        }
+
+        return {
+            type: 'normal',
+            tag: 'NORMAL',
+            time: timeText,
+            title: 'Kondisi Sensor Normal',
+            desc: 'Semua parameter berada dalam batas ambang aman.',
+            value: valSummary
+        };
+    }
+
     function loadHistoryFromSupabase() {
         Promise.all([
             fetchSupabaseRows(SUPABASE_CONFIG.sensorTable, 200),
@@ -1227,6 +1291,26 @@
                     };
                 });
                 window.setSensorHistoryData(mappedSensor);
+            }
+
+            if (sensorRows.length > 0 && typeof window.setSensorNotifications === 'function') {
+                var historyNotifs = sensorRows.slice(0, 50).map(function (r) {
+                    var phVal = toSensorNumber(r.PH);
+                    var ppmVal = toSensorNumber(r.PPM);
+                    var wtVal = toSensorNumber(r.Suhu_air);
+                    var humVal = toSensorNumber(r.kelembapan);
+                    var rowWarn = typeof r.status === 'boolean' ? !r.status : false;
+                    return buildSensorNotificationItem(
+                        phVal,
+                        ppmVal,
+                        wtVal,
+                        humVal,
+                        thr,
+                        formatDisplayTimeWithDate(r.waktu) + ' WIB',
+                        rowWarn
+                    );
+                });
+                window.setSensorNotifications(historyNotifs);
             }
 
             if (awsRows.length > 0 && typeof window.setAwsHistoryData === 'function') {
