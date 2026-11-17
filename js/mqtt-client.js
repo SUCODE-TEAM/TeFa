@@ -9,6 +9,13 @@
         statusTopic: 'tefa/hidroponik/status'
     };
 
+    var SUPABASE_CONFIG = {
+        url: 'https://nrlktavercurgxwgpcfa.supabase.co/rest/v1',
+        anonKey: 'sb_publishable_P7p6_aBUXNlZ_d-O2G2UGQ_sm2jX9cF',
+        sensorTable: 'DataSensor',
+        awsTable: 'DataAWS'
+    };
+
     var MQTT_CONFIG = {
         brokerUrl: DEFAULT_MQTT_CONFIG.brokerUrl,
         topic: DEFAULT_MQTT_CONFIG.topic,
@@ -1096,12 +1103,222 @@
                 time: wibTime + ' WIB',
                 temp: airTemp ? (airTemp.value.toFixed(1) + ' °C') : '-',
                 hum: airHum ? (airHum.value.toFixed(1) + '%') : '-',
-                wind: '-',
-                solar: solarTxt,
-                soil: '-'
+                solar: solarTxt
             }, 'daily');
         }
         syncAwsHistoryTables(false);
+
+        // 9. Simpan data sensor & AWS ke Supabase untuk riwayat persisten
+        saveTelemetryToSupabase(payload, ph, ec, waterTemp, light, airTemp, airHum);
+    }
+
+    function postSupabaseRow(table, row) {
+        if (typeof fetch !== 'function' || !SUPABASE_CONFIG.anonKey) return;
+        fetch(SUPABASE_CONFIG.url + '/' + table, {
+            method: 'POST',
+            headers: {
+                'apikey': SUPABASE_CONFIG.anonKey,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify(row)
+        }).then(function (res) {
+            if (!res.ok) {
+                return res.text().then(function (txt) {
+                    console.warn('[TeFa Supabase] Gagal simpan ke ' + table + ' (' + res.status + '):', txt);
+                });
+            }
+        }).catch(function (err) {
+            console.warn('[TeFa Supabase] Error simpan ke ' + table + ':', err);
+        });
+    }
+
+    function fetchSupabaseRows(table, limit) {
+        if (typeof fetch !== 'function' || !SUPABASE_CONFIG.anonKey) return Promise.resolve([]);
+        var url = SUPABASE_CONFIG.url + '/' + table + '?select=*&order=waktu.desc&limit=' + (limit || 200);
+        return fetch(url, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_CONFIG.anonKey
+            }
+        }).then(function (res) {
+            if (!res.ok) {
+                return res.text().then(function (txt) {
+                    console.warn('[TeFa Supabase] Gagal muat ' + table + ' (' + res.status + '):', txt);
+                    return [];
+                });
+            }
+            return res.json();
+        }).catch(function (err) {
+            console.warn('[TeFa Supabase] Error muat ' + table + ':', err);
+            return [];
+        });
+    }
+
+    function saveTelemetryToSupabase(payload, ph, ec, waterTemp, light, airTemp, airHum) {
+        var d = payload && payload.timestamp ? new Date(payload.timestamp) : new Date();
+        if (isNaN(d.getTime())) d = new Date();
+        var isoTime = d.toISOString();
+
+        if (ph || ec || waterTemp || light || airHum) {
+            var thr = getThresholds();
+            var isWarnNow = (ph && (ph.value < thr.phMin || ph.value > thr.phMax)) ||
+                (waterTemp && (waterTemp.value < thr.tempMin || waterTemp.value > thr.tempMax)) ||
+                (airHum && (airHum.value < thr.humMin || airHum.value > thr.humMax));
+            postSupabaseRow(SUPABASE_CONFIG.sensorTable, {
+                waktu: isoTime,
+                PH: ph ? Number(ph.value.toFixed(2)) : null,
+                PPM: ec ? Number(ec.value.toFixed(2)) : null,
+                Suhu_air: waterTemp ? Number(waterTemp.value.toFixed(1)) : null,
+                cahaya: light ? Math.round(Math.min(32767, Math.max(-32768, light.value))) : null,
+                kelembapan: airHum ? Number(airHum.value.toFixed(1)) : null,
+                status: !isWarnNow
+            });
+        }
+
+        if (airTemp || airHum || light) {
+            postSupabaseRow(SUPABASE_CONFIG.awsTable, {
+                waktu: isoTime,
+                temperatur: airTemp ? Number(airTemp.value.toFixed(1)) : null,
+                kelembapan: airHum ? Number(airHum.value.toFixed(1)) : null,
+                radiasi: light ? Number((light.value * 0.0079).toFixed(2)) : null
+            });
+        }
+    }
+
+    function formatDisplayTimeWithDate(isoString) {
+        var d = isoString ? new Date(isoString) : new Date();
+        if (isNaN(d.getTime())) return '--:--:--';
+        var now = new Date();
+        var isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+        var t = formatWibTime(isoString);
+        return isToday ? t : (formatShortDate(d.getTime()) + ' ' + t);
+    }
+
+    function loadHistoryFromSupabase() {
+        Promise.all([
+            fetchSupabaseRows(SUPABASE_CONFIG.sensorTable, 200),
+            fetchSupabaseRows(SUPABASE_CONFIG.awsTable, 500)
+        ]).then(function (results) {
+            var sensorRows = Array.isArray(results[0]) ? results[0] : [];
+            var awsRows = Array.isArray(results[1]) ? results[1] : [];
+            var thr = getThresholds();
+
+            if (sensorRows.length > 0 && typeof window.setSensorHistoryData === 'function') {
+                var mappedSensor = sensorRows.map(function (r) {
+                    var phVal = toSensorNumber(r.PH);
+                    var ppmVal = toSensorNumber(r.PPM);
+                    var wtVal = toSensorNumber(r.Suhu_air);
+                    var lxVal = toSensorNumber(r.cahaya);
+                    var humVal = toSensorNumber(r.kelembapan);
+                    var isWarn = typeof r.status === 'boolean'
+                        ? !r.status
+                        : ((phVal !== null && (phVal < thr.phMin || phVal > thr.phMax)) ||
+                            (wtVal !== null && (wtVal < thr.tempMin || wtVal > thr.tempMax)) ||
+                            (humVal !== null && (humVal < thr.humMin || humVal > thr.humMax)));
+                    return {
+                        time: formatDisplayTimeWithDate(r.waktu),
+                        ph: phVal !== null ? phVal.toFixed(2) : 'N/A',
+                        ppm: ppmVal !== null ? (ppmVal.toFixed(2) + ' mS/cm') : 'N/A',
+                        temp: wtVal !== null ? wtVal.toFixed(1) : 'N/A',
+                        light: lxVal !== null ? lxVal.toFixed(1) : 'N/A',
+                        hum: humVal !== null ? (humVal.toFixed(1) + '%') : 'N/A',
+                        status: isWarn ? 'Warning' : 'Normal'
+                    };
+                });
+                window.setSensorHistoryData(mappedSensor);
+            }
+
+            if (awsRows.length > 0 && typeof window.setAwsHistoryData === 'function') {
+                var now = Date.now();
+                var monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+                var pad2 = function (n) { return String(n).padStart(2, '0'); };
+
+                var awsPoints = awsRows.map(function (r) {
+                    var ts = r.waktu ? new Date(r.waktu).getTime() : now;
+                    if (isNaN(ts)) ts = now;
+                    var rad = toSensorNumber(r.radiasi);
+                    return {
+                        ts: ts,
+                        time: formatDisplayTimeWithDate(r.waktu),
+                        airTemp: toSensorNumber(r.temperatur),
+                        airHum: toSensorNumber(r.kelembapan),
+                        light: rad !== null ? (rad / 0.0079) : null,
+                        radiasi: rad
+                    };
+                });
+
+                var dailyRows = awsPoints.filter(function (pt) {
+                    return now - pt.ts <= 24 * 60 * 60 * 1000;
+                }).slice(0, 200).map(function (pt) {
+                    var solarTxt = pt.radiasi !== null
+                        ? (pt.radiasi.toFixed(1) + ' W/m² · ' + ((pt.radiasi / 0.0079) * 0.0185).toFixed(0) + ' PAR')
+                        : '-';
+                    return {
+                        time: pt.time + ' WIB',
+                        temp: pt.airTemp !== null ? (pt.airTemp.toFixed(1) + ' °C') : '-',
+                        hum: pt.airHum !== null ? (pt.airHum.toFixed(1) + '%') : '-',
+                        solar: solarTxt
+                    };
+                });
+                window.setAwsHistoryData('daily', dailyRows);
+
+                var weekWindow = awsPoints.filter(function (pt) { return now - pt.ts <= 7 * 24 * 60 * 60 * 1000; });
+                window.setAwsHistoryData('weekly', buildGroupedAwsRows(
+                    weekWindow,
+                    function (pt) {
+                        var d = new Date(pt.ts);
+                        return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+                    },
+                    function (pt) {
+                        var d = new Date(pt.ts);
+                        return pad2(d.getDate()) + ' ' + monthsShort[d.getMonth()] + ' ' + d.getFullYear();
+                    }
+                ));
+
+                var monthWindow = awsPoints.filter(function (pt) { return now - pt.ts <= 30 * 24 * 60 * 60 * 1000; });
+                var getWeekStart = function (ts) {
+                    var d = new Date(ts);
+                    var day = d.getDay();
+                    var diff = d.getDate() - day + (day === 0 ? -6 : 1);
+                    return new Date(d.getFullYear(), d.getMonth(), diff);
+                };
+                window.setAwsHistoryData('monthly', buildGroupedAwsRows(
+                    monthWindow,
+                    function (pt) {
+                        var ws = getWeekStart(pt.ts);
+                        return ws.getFullYear() + '-' + pad2(ws.getMonth() + 1) + '-' + pad2(ws.getDate());
+                    },
+                    function (pt) {
+                        var ws = getWeekStart(pt.ts);
+                        var we = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + 6);
+                        if (ws.getMonth() === we.getMonth()) {
+                            return pad2(ws.getDate()) + ' - ' + pad2(we.getDate()) + ' ' + monthsShort[we.getMonth()] + ' ' + we.getFullYear();
+                        }
+                        return pad2(ws.getDate()) + ' ' + monthsShort[ws.getMonth()] + ' - ' + pad2(we.getDate()) + ' ' + monthsShort[we.getMonth()] + ' ' + we.getFullYear();
+                    }
+                ));
+            }
+
+            if (telemetryLog.length === 0 && sensorRows.length > 0) {
+                telemetryLog = sensorRows.slice().reverse().map(function (r) {
+                    var ts = r.waktu ? new Date(r.waktu).getTime() : Date.now();
+                    if (isNaN(ts)) ts = Date.now();
+                    return {
+                        ts: ts,
+                        time: formatWibTime(r.waktu),
+                        ph: toSensorNumber(r.PH) || 0,
+                        ec: toSensorNumber(r.PPM) || 0,
+                        waterTemp: toSensorNumber(r.Suhu_air) || 0,
+                        airTemp: 0,
+                        airHum: null,
+                        light: toSensorNumber(r.cahaya) || 0
+                    };
+                });
+                saveTelemetryLog();
+                renderTelemetryChart();
+            }
+        });
     }
 
     function formatAwsAvgRow(items, label) {
@@ -1414,7 +1631,7 @@
         });
     }
 
-    
+
     window.simulateMqttData = function (customData) {
         var dummy = customData || {
             ph: 6.85,
@@ -1553,6 +1770,7 @@
     function init() {
         loadSavedMqttConfig();
         initChartControls();
+        loadHistoryFromSupabase();
         initMqttClient();
 
         window.addEventListener('storage', function (e) {

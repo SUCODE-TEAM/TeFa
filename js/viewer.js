@@ -1900,6 +1900,12 @@
             render();
         };
 
+        window.setSensorHistoryData = function (rows) {
+            sensorHistoryData = Array.isArray(rows) ? rows.slice(0, 200) : [];
+            currentPage = 1;
+            render();
+        };
+
         render();
     }
 
