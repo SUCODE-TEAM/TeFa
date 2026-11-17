@@ -6,15 +6,7 @@
         brokerUrl: 'wss://broker.emqx.io:8084/mqtt',
         topic: 'tefa/hidroponik/sensor',
         publishTopic: 'tefa/hidroponik/control',
-        statusTopic: 'tefa/hidroponik/status',
-        topics: [
-            'tefa/hidroponik/sensor',
-            'tefa/hidroponik/status',
-            'tefa/smkn2yogyakarta/data',
-            'tefa/sensor',
-            'tefa/data',
-            'tefa/#'
-        ]
+        statusTopic: 'tefa/hidroponik/status'
     };
 
     var MQTT_CONFIG = {
@@ -22,7 +14,6 @@
         topic: DEFAULT_MQTT_CONFIG.topic,
         publishTopic: DEFAULT_MQTT_CONFIG.publishTopic,
         statusTopic: DEFAULT_MQTT_CONFIG.statusTopic,
-        topics: DEFAULT_MQTT_CONFIG.topics,
         options: {
             clientId: 'tefa_web_' + Math.random().toString(16).slice(2, 10),
             protocolId: 'MQTT',
@@ -1340,7 +1331,7 @@
             console.log('[TeFa MQTT] Terhubung ke ' + MQTT_CONFIG.brokerUrl + '! Mendaftarkan subscriptions...');
             setConnectionUI('Online', 'Menunggu data...', true);
 
-            var topics = Array.isArray(MQTT_CONFIG.topics) ? MQTT_CONFIG.topics : [MQTT_CONFIG.topic, MQTT_CONFIG.statusTopic].filter(Boolean);
+            var topics = [MQTT_CONFIG.topic, MQTT_CONFIG.statusTopic].filter(Boolean);
             var seen = {};
             topics.forEach(function (top) {
                 if (seen[top]) return;
@@ -1361,10 +1352,16 @@
             }
         });
 
-        client.on('message', function (topic, message) {
+        client.on('message', function (topic, message, packet) {
             try {
-                // Abaikan pesan control dari web sendiri
-                if (topic.indexOf('control') !== -1 || topic.indexOf('aktuator') !== -1) {
+                // Abaikan pesan retained lama dari broker agar tidak muncul saat sensor mati
+                if (packet && packet.retain) {
+                    console.log('[TeFa MQTT] Mengabaikan pesan retained lama dari [' + topic + ']');
+                    return;
+                }
+
+                // Hanya proses pesan dari topik sensor & status yang dikonfigurasi
+                if (topic !== MQTT_CONFIG.topic && topic !== MQTT_CONFIG.statusTopic) {
                     return;
                 }
 
@@ -1375,11 +1372,13 @@
                     updateDeviceStatusUI(data);
                 }
 
-                var normalized = normalizePayload(data);
-                if (normalized && Array.isArray(normalized.sensors)) {
-                    updateDashboardUI(normalized);
-                } else if (!data || (!data.pumps_status && data.status_message === undefined)) {
-                    console.warn('[TeFa MQTT] Format data belum sesuai (harus ada nilai sensor seperti ph, ec, temp):', data);
+                if (topic === MQTT_CONFIG.topic) {
+                    var normalized = normalizePayload(data);
+                    if (normalized && Array.isArray(normalized.sensors)) {
+                        updateDashboardUI(normalized);
+                    } else if (!data || (!data.pumps_status && data.status_message === undefined)) {
+                        console.warn('[TeFa MQTT] Format data belum sesuai (harus ada nilai sensor seperti ph, ec, temp):', data);
+                    }
                 }
             } catch (e) {
                 console.error('[TeFa MQTT] Gagal parsing JSON pesan dari ' + topic + ':', e);
