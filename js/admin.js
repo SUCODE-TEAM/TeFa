@@ -4,8 +4,8 @@
     function updateClock() {
         if (!dateEl) return;
         var now = new Date();
-        var days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        var months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        var days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        var months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
         var p = function (n) { return String(n).padStart(2, '0'); };
         var str = days[now.getDay()] + ', ' + now.getDate() + ' ' + months[now.getMonth()] + ' ' + now.getFullYear() + ' · ' + p(now.getHours()) + ':' + p(now.getMinutes()) + ' WIB';
         dateEl.textContent = str;
@@ -2329,7 +2329,7 @@
             if (totalEl) totalEl.textContent = total;
 
             if (total === 0) {
-                tableBody.innerHTML = '<tr><td colspan="6" class="empty-table-cell"><div style="display:flex;align-items:center;justify-content:center;gap:8px;color:var(--red)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>Tidak ada data riwayat AWS</div></td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="4" class="empty-table-cell"><div style="display:flex;align-items:center;justify-content:center;gap:8px;color:var(--red)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>Tidak ada data riwayat AWS</div></td></tr>';
                 if (startEl) startEl.textContent = '0';
                 if (endEl) endEl.textContent = '0';
                 if (btnsContainer) btnsContainer.innerHTML = '';
@@ -2354,9 +2354,7 @@
                     '<td>' + r.time + '</td>' +
                     '<td>' + r.temp + '</td>' +
                     '<td>' + r.hum + '</td>' +
-                    '<td>' + r.wind + '</td>' +
                     '<td>' + r.solar + '</td>' +
-                    '<td>' + r.soil + '</td>' +
                     '</tr>';
             });
             tableBody.innerHTML = html;

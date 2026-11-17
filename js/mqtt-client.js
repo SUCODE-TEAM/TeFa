@@ -869,8 +869,8 @@
                 weatherTempEl.style.color = 'var(--ink)';
             }
             if (wstatsItems.length >= 3) {
-                wstatsItems[1].innerHTML = '<small>Min Temp</small>' + minAirTemp.toFixed(1) + '°C';
-                wstatsItems[2].innerHTML = '<small>Max Temp</small>' + maxAirTemp.toFixed(1) + '°C';
+                wstatsItems[1].innerHTML = '<small>Suhu Min</small>' + minAirTemp.toFixed(1) + '°C';
+                wstatsItems[2].innerHTML = '<small>Suhu Maks</small>' + maxAirTemp.toFixed(1) + '°C';
             }
         }
         if (weatherDescEl) {
@@ -878,7 +878,7 @@
             weatherDescEl.style.color = '#1B4332';
         }
         if (airHum && wstatsItems.length >= 1) {
-            wstatsItems[0].innerHTML = '<small>Humidity</small>' + airHum.value.toFixed(1) + '%';
+            wstatsItems[0].innerHTML = '<small>Kelembapan</small>' + airHum.value.toFixed(1) + '%';
         }
 
         // 3. Update 3 Sensor Cards (pH, Nutrition/EC, Light)
