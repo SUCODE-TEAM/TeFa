@@ -955,6 +955,55 @@ h2.sec {
     transition: all .2s ease;
 }
 
+.btn-inject-ab {
+    background: #fff;
+    color: var(--g5);
+    border: 1.5px solid var(--g2);
+}
+
+.btn-inject-ab:hover {
+    background: var(--g1);
+    border-color: var(--g3);
+}
+
+.btn-inject-ab .ab-status-badge {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: var(--g2);
+    color: var(--mute);
+    line-height: 1.2;
+    transition: background .2s ease, color .2s ease;
+}
+
+.btn-inject-ab.is-active {
+    background: var(--g4);
+    color: #fff;
+    border-color: var(--g4);
+    box-shadow: 0 4px 14px rgba(45, 106, 79, .28);
+}
+
+.btn-inject-ab.is-active:hover {
+    background: var(--g5);
+    border-color: var(--g5);
+}
+
+.btn-inject-ab.is-active .ab-status-badge {
+    background: rgba(74, 222, 128, 0.22);
+    color: #DCFCE7;
+}
+
+.btn-inject-ab.is-pending .ab-status-badge {
+    background: rgba(251, 146, 60, 0.2);
+    color: #C2410C;
+}
+
+.btn-inject-ab.is-active.is-pending .ab-status-badge {
+    color: #FFEDD5;
+}
+
 .btn-all-on {
     background: var(--g9);
     color: #fff;
@@ -3589,11 +3638,13 @@ body {
 
     .relay-actions {
         width: 100%;
+        flex-wrap: wrap;
     }
 
     .relay-btn {
         flex: 1;
         justify-content: center;
+        white-space: nowrap;
     }
 
     .relay-grid {

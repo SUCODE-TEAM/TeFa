@@ -162,6 +162,28 @@
                 statusEl.textContent = 'Mati';
             }
         }
+        if (card.dataset.pump === 'pump_A' || card.dataset.pump === 'pump_B') {
+            syncInjectAbButtonState();
+        }
+    }
+
+    function isAbMixActive() {
+        var pumpA = document.querySelector('.relay-card[data-pump="pump_A"]');
+        var pumpB = document.querySelector('.relay-card[data-pump="pump_B"]');
+        return Boolean(pumpA && pumpB && pumpA.classList.contains('active') && pumpB.classList.contains('active'));
+    }
+
+    function syncInjectAbButtonState() {
+        var btn = document.getElementById('btnInjectAb');
+        if (!btn) return;
+        var active = isAbMixActive();
+        btn.classList.remove('is-pending');
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        var badge = btn.querySelector('.ab-status-badge');
+        if (badge) {
+            badge.textContent = active ? 'ON' : 'OFF';
+        }
     }
 
     function setRelayPendingUI(card, targetState) {
@@ -261,55 +283,58 @@
         });
     });
 
-    // All ON & All OFF buttons
+    // Inject AB Mix, All ON & All OFF buttons
+    function setRelaysState(isOn, targetPumpKeys) {
+        var pumpAffected = false;
+        var overrides = {};
+        relayCards.forEach(function (card) {
+            if (card.dataset.disabled === 'true' || card.classList.contains('relay-disabled')) {
+                return;
+            }
+            var pumpKey = card.dataset.pump;
+            if (targetPumpKeys && targetPumpKeys.indexOf(pumpKey) === -1) {
+                return;
+            }
+            if (pumpKey && PUMP_KEYS.indexOf(pumpKey) !== -1) {
+                pumpAffected = true;
+                setRelayPendingUI(card, isOn);
+                overrides[pumpKey] = isOn ? 'on' : 'off';
+            } else {
+                updateRelayUI(card, isOn);
+            }
+        });
+        if (pumpAffected) {
+            publishPumpCommand(overrides);
+        }
+    }
+
+    var btnInjectAb = document.getElementById('btnInjectAb');
     var btnAllOn = document.getElementById('btnAllOn');
     var btnAllOff = document.getElementById('btnAllOff');
+
+    if (btnInjectAb) {
+        syncInjectAbButtonState();
+        btnInjectAb.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var nextOn = !isAbMixActive();
+            btnInjectAb.classList.add('is-pending');
+            var badge = btnInjectAb.querySelector('.ab-status-badge');
+            if (badge) badge.textContent = '...';
+            setRelaysState(nextOn, ['pump_A', 'pump_B']);
+        });
+    }
 
     if (btnAllOn) {
         btnAllOn.addEventListener('click', function (e) {
             e.stopPropagation();
-            var pumpAffected = false;
-            var overrides = {};
-            relayCards.forEach(function (card) {
-                if (card.dataset.disabled === 'true' || card.classList.contains('relay-disabled')) {
-                    return;
-                }
-                var pumpKey = card.dataset.pump;
-                if (pumpKey && PUMP_KEYS.indexOf(pumpKey) !== -1) {
-                    pumpAffected = true;
-                    setRelayPendingUI(card, true);
-                    overrides[pumpKey] = 'on';
-                } else {
-                    updateRelayUI(card, true);
-                }
-            });
-            if (pumpAffected) {
-                publishPumpCommand(overrides);
-            }
+            setRelaysState(true, null);
         });
     }
 
     if (btnAllOff) {
         btnAllOff.addEventListener('click', function (e) {
             e.stopPropagation();
-            var pumpAffected = false;
-            var overrides = {};
-            relayCards.forEach(function (card) {
-                if (card.dataset.disabled === 'true' || card.classList.contains('relay-disabled')) {
-                    return;
-                }
-                var pumpKey = card.dataset.pump;
-                if (pumpKey && PUMP_KEYS.indexOf(pumpKey) !== -1) {
-                    pumpAffected = true;
-                    setRelayPendingUI(card, false);
-                    overrides[pumpKey] = 'off';
-                } else {
-                    updateRelayUI(card, false);
-                }
-            });
-            if (pumpAffected) {
-                publishPumpCommand(overrides);
-            }
+            setRelaysState(false, null);
         });
     }
 
