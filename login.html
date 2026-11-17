@@ -659,44 +659,7 @@
             }
         }
 
-        /* ================= PARALLAX CURSOR EFFECT ================= */
-        @media (pointer: fine) {
-            #cardElement {
-                transform-style: preserve-3d;
-                will-change: transform;
-            }
-
-            #cardElement::after {
-                content: "";
-                position: absolute;
-                inset: 0;
-                border-radius: inherit;
-                pointer-events: none;
-                opacity: 0;
-                background: radial-gradient(
-                    420px circle at var(--mx, 50%) var(--my, 50%),
-                    rgba(22, 219, 101, 0.09),
-                    rgba(255, 255, 255, 0.24) 32%,
-                    transparent 65%
-                );
-                transition: opacity 0.3s ease;
-                z-index: 2;
-            }
-
-            #cardElement.is-tilting::after {
-                opacity: 1;
-            }
-
-            .bg-deco {
-                will-change: transform;
-            }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            #cardElement::after {
-                display: none !important;
-            }
-        }
+        
     </style>
 </head>
 <body>
@@ -1008,89 +971,7 @@
                 }, 350);
             });
 
-            /* ================= PARALLAX CURSOR EFFECT ================= */
-            (function initParallaxCursorEffect() {
-                if (!window.matchMedia || !window.matchMedia('(pointer: fine)').matches) return;
-                if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-                if (document.body.dataset.parallaxInit === '1') return;
-                document.body.dataset.parallaxInit = '1';
-
-                const decoTr = document.querySelector('.bg-deco-tr');
-                const decoBl = document.querySelector('.bg-deco-bl');
-
-                let normX = 0;
-                let normY = 0;
-                let curNormX = 0;
-                let curNormY = 0;
-                let rafId = null;
-
-                function animateParallax() {
-                    curNormX += (normX - curNormX) * 0.08;
-                    curNormY += (normY - curNormY) * 0.08;
-
-                    if (decoTr) {
-                        decoTr.style.transform = `translate3d(${(-curNormX * 22).toFixed(2)}px, ${(-curNormY * 18).toFixed(2)}px, 0)`;
-                    }
-                    if (decoBl) {
-                        decoBl.style.transform = `translate3d(${(curNormX * 26).toFixed(2)}px, ${(curNormY * 22).toFixed(2)}px, 0)`;
-                    }
-
-                    if (
-                        Math.abs(normX - curNormX) > 0.002 ||
-                        Math.abs(normY - curNormY) > 0.002
-                    ) {
-                        rafId = requestAnimationFrame(animateParallax);
-                    } else {
-                        rafId = null;
-                    }
-                }
-
-                function scheduleAnimate() {
-                    if (!rafId) {
-                        rafId = requestAnimationFrame(animateParallax);
-                    }
-                }
-
-                document.addEventListener('mousemove', (e) => {
-                    normX = (e.clientX / Math.max(window.innerWidth, 1) - 0.5) * 2;
-                    normY = (e.clientY / Math.max(window.innerHeight, 1) - 0.5) * 2;
-                    scheduleAnimate();
-                }, { passive: true });
-
-                document.addEventListener('mouseleave', () => {
-                    normX = 0;
-                    normY = 0;
-                    scheduleAnimate();
-                });
-
-                if (card) {
-                    card.addEventListener('mousemove', (e) => {
-                        const rect = card.getBoundingClientRect();
-                        if (!rect.width || !rect.height) return;
-                        const x = e.clientX - rect.left;
-                        const y = e.clientY - rect.top;
-                        card.style.setProperty('--mx', `${x.toFixed(1)}px`);
-                        card.style.setProperty('--my', `${y.toFixed(1)}px`);
-                        card.classList.add('is-tilting');
-
-                        const rx = ((y - rect.height / 2) / (rect.height / 2)) * -2.8;
-                        const ry = ((x - rect.width / 2) / (rect.width / 2)) * 2.8;
-                        card.style.transition = 'box-shadow .25s ease, transform .08s ease-out';
-                        card.style.transform = `perspective(1000px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg)`;
-                    }, { passive: true });
-
-                    card.addEventListener('mouseleave', () => {
-                        card.classList.remove('is-tilting');
-                        card.style.transition = 'box-shadow .25s ease, transform .4s cubic-bezier(0.22, 1, 0.36, 1)';
-                        card.style.transform = '';
-                        setTimeout(() => {
-                            if (!card.classList.contains('is-tilting')) {
-                                card.style.transition = '';
-                            }
-                        }, 400);
-                    });
-                }
-            })();
+            
         });
     </script>
 </body>
