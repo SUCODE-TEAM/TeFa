@@ -477,7 +477,7 @@
 
             var rowsHtml = ['<div class="chart-tooltip-time">' + pt.time + ' WIB</div>'];
             if (chartState.visibleSeries.ec) {
-                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#0D2818"></i>EC / TDS</span><span class="chart-tooltip-val">' + (pt.ec || 0).toFixed(2) + ' mS/cm</span></div>');
+                rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#0D2818"></i>EC</span><span class="chart-tooltip-val">' + (pt.ec || 0).toFixed(2) + ' mS/cm</span></div>');
             }
             if (chartState.visibleSeries.ph) {
                 rowsHtml.push('<div class="chart-tooltip-row"><span class="chart-tooltip-label"><i class="chart-tooltip-swatch" style="background:#1B4332"></i>pH</span><span class="chart-tooltip-val">' + (pt.ph || 0).toFixed(2) + ' pH</span></div>');
@@ -544,16 +544,22 @@
     function getThresholds() {
         try {
             var saved = JSON.parse(localStorage.getItem('tefa_dashboard_settings') || '{}');
+            var rawEcMin = parseFloat(String(saved.ecMin || saved.tdsMin || '1.0').replace(',', '.'));
+            var rawEcMax = parseFloat(String(saved.ecMax || saved.tdsMax || '2.5').replace(',', '.'));
+            var ecMin = (!isNaN(rawEcMin) && rawEcMin >= 0 && rawEcMin <= 20) ? rawEcMin : 1.0;
+            var ecMax = (!isNaN(rawEcMax) && rawEcMax > 0 && rawEcMax <= 20) ? rawEcMax : 2.5;
             return {
-                phMin: parseFloat((saved.phMin || '5.5').replace(',', '.')) || 5.5,
-                phMax: parseFloat((saved.phMax || '6.5').replace(',', '.')) || 6.5,
-                tempMin: parseFloat((saved.tempMin || '20').replace(',', '.')) || 20,
-                tempMax: parseFloat((saved.tempMax || '30').replace(',', '.')) || 30,
-                humMin: parseFloat((saved.humMin || '50').replace(',', '.')) || 50,
-                humMax: parseFloat((saved.humMax || '85').replace(',', '.')) || 85
+                phMin: parseFloat(String(saved.phMin || '5.5').replace(',', '.')) || 5.5,
+                phMax: parseFloat(String(saved.phMax || '6.5').replace(',', '.')) || 6.5,
+                ecMin: ecMin,
+                ecMax: ecMax,
+                tempMin: parseFloat(String(saved.tempMin || '20').replace(',', '.')) || 20,
+                tempMax: parseFloat(String(saved.tempMax || '30').replace(',', '.')) || 30,
+                humMin: parseFloat(String(saved.humMin || '50').replace(',', '.')) || 50,
+                humMax: parseFloat(String(saved.humMax || '85').replace(',', '.')) || 85
             };
         } catch (e) {
-            return { phMin: 5.5, phMax: 6.5, tempMin: 20, tempMax: 30, humMin: 50, humMax: 85 };
+            return { phMin: 5.5, phMax: 6.5, ecMin: 1.0, ecMax: 2.5, tempMin: 20, tempMax: 30, humMin: 50, humMax: 85 };
         }
     }
 
@@ -796,7 +802,7 @@
             normalizedSensors.push({ id: '001pH', value: phVal, satuan: 'pH' });
         }
 
-        // EC / TDS
+        // EC
         var ecVal = getVal(['ec', 'EC', 'ec_value', '002EC', 'sensor_ec']);
         var tdsVal = getVal(['tds', 'TDS', 'ppm', 'PPM']);
         if (ecVal !== null) {
@@ -874,9 +880,10 @@
 
         // Evaluasi status Normal / Warning
         var isPhWarn = ph && (ph.value < thr.phMin || ph.value > thr.phMax);
+        var isEcWarn = ec && (ec.value < thr.ecMin || ec.value > thr.ecMax);
         var isWaterWarn = waterTemp && (waterTemp.value < thr.tempMin || waterTemp.value > thr.tempMax);
         var isHumWarn = airHum && (airHum.value < thr.humMin || airHum.value > thr.humMax);
-        var overallStatus = (isPhWarn || isWaterWarn || isHumWarn) ? 'Warning' : 'Normal';
+        var overallStatus = (isPhWarn || isEcWarn || isWaterWarn || isHumWarn) ? 'Warning' : 'Normal';
 
         // 1. Update Hero Uptime & Hardware Health
         var uptimeEl = document.getElementById('uptime');
@@ -907,12 +914,12 @@
                 if (s1) { s1.textContent = isPhWarn ? 'Warning' : 'Normal'; s1.classList.remove('off'); }
             }
 
-            // Sensor EC/TDS
+            // Sensor EC
             if (ec) {
                 var v2 = hwItems[2].querySelector('.v');
                 var s2 = hwItems[2].querySelector('.s');
                 if (v2) { v2.textContent = ec.value.toFixed(2) + ' ' + (ec.satuan || 'mS/cm'); v2.classList.remove('off'); }
-                if (s2) { s2.textContent = 'Normal'; s2.classList.remove('off'); }
+                if (s2) { s2.textContent = isEcWarn ? 'Warning' : 'Normal'; s2.classList.remove('off'); }
             }
 
             // BH1750 Light
@@ -988,8 +995,8 @@
                 if (ecB) ecB.innerHTML = ec.value.toFixed(2) + ' <span style="font-size:15px;font-weight:600;color:var(--mute)">' + (ec.satuan || 'mS/cm') + '</span>';
                 if (ecBar) ecBar.style.width = Math.min(100, Math.max(5, (ec.value / 3.0) * 100)).toFixed(1) + '%';
                 if (ecSt) {
-                    ecSt.textContent = 'Optimal';
-                    ecSt.style.color = '#1B4332';
+                    ecSt.textContent = isEcWarn ? 'Warning' : 'Optimal';
+                    ecSt.style.color = isEcWarn ? '#E65100' : '#1B4332';
                 }
             }
             if (light) {
@@ -1259,6 +1266,7 @@
         if (ph || ec || waterTemp || light || airHum) {
             var thr = getThresholds();
             var isWarnNow = (ph && (ph.value < thr.phMin || ph.value > thr.phMax)) ||
+                (ec && (ec.value < thr.ecMin || ec.value > thr.ecMax)) ||
                 (waterTemp && (waterTemp.value < thr.tempMin || waterTemp.value > thr.tempMax)) ||
                 (airHum && (airHum.value < thr.humMin || airHum.value > thr.humMax));
             postSupabaseRow(SUPABASE_CONFIG.sensorTable, {
@@ -1297,6 +1305,10 @@
         if (phVal !== null && (phVal < thr.phMin || phVal > thr.phMax)) {
             issues.push('pH');
             details.push('pH ' + phVal.toFixed(2) + ' (batas ' + thr.phMin + '–' + thr.phMax + ')');
+        }
+        if (ecVal !== null && (ecVal < thr.ecMin || ecVal > thr.ecMax)) {
+            issues.push('EC');
+            details.push('EC ' + ecVal.toFixed(2) + ' mS/cm (batas ' + thr.ecMin + '–' + thr.ecMax + ')');
         }
         if (wtVal !== null && (wtVal < thr.tempMin || wtVal > thr.tempMax)) {
             issues.push('Suhu Air');
@@ -1373,6 +1385,7 @@
                     var isWarn = typeof r.status === 'boolean'
                         ? !r.status
                         : ((phVal !== null && (phVal < thr.phMin || phVal > thr.phMax)) ||
+                            (ppmVal !== null && (ppmVal < thr.ecMin || ppmVal > thr.ecMax)) ||
                             (wtVal !== null && (wtVal < thr.tempMin || wtVal > thr.tempMax)) ||
                             (humVal !== null && (humVal < thr.humMin || humVal > thr.humMax)));
                     return {
@@ -1817,26 +1830,6 @@
             }
         });
     }
-
-
-    window.simulateMqttData = function (customData) {
-        var dummy = customData || {
-            ph: 6.85,
-            ec: 1.48,
-            temp: 28.2,
-            hum: 68.5,
-            water_temp: 25.4,
-            light: 550,
-            wifi: -58
-        };
-        var normalized = normalizePayload(dummy);
-        if (normalized) {
-            updateDashboardUI(normalized);
-            console.log('[TeFa MQTT] Simulasi dummy berhasil diterapkan:', normalized);
-            return 'OK';
-        }
-        return 'Invalid payload';
-    };
 
     window.publishMqttSettings = function (payload) {
         if (window.tefaMqttClient && window.tefaMqttClient.connected) {

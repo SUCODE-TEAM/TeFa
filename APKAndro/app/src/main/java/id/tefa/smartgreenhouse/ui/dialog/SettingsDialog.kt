@@ -63,8 +63,8 @@ class SettingsDialog(
 
         val etPhMin = view.findViewById<EditText>(R.id.set_ph_min)
         val etPhMax = view.findViewById<EditText>(R.id.set_ph_max)
-        val etTdsMin = view.findViewById<EditText>(R.id.set_tds_min)
-        val etTdsMax = view.findViewById<EditText>(R.id.set_tds_max)
+        val etEcMin = view.findViewById<EditText>(R.id.set_ec_min)
+        val etEcMax = view.findViewById<EditText>(R.id.set_ec_max)
         val etTempMin = view.findViewById<EditText>(R.id.set_temp_min)
         val etTempMax = view.findViewById<EditText>(R.id.set_temp_max)
         val etHumMin = view.findViewById<EditText>(R.id.set_hum_min)
@@ -97,8 +97,8 @@ class SettingsDialog(
         fun populateFields(s: DashboardSettings) {
             etPhMin.setText(s.phMin)
             etPhMax.setText(s.phMax)
-            etTdsMin.setText(s.tdsMin)
-            etTdsMax.setText(s.tdsMax)
+            etEcMin.setText(s.tdsMin)
+            etEcMax.setText(s.tdsMax)
             etTempMin.setText(s.tempMin)
             etTempMax.setText(s.tempMax)
             etHumMin.setText(s.humMin)
@@ -158,8 +158,8 @@ class SettingsDialog(
             val updated = current.copy(
                 phMin = etPhMin.text.toString().trim().ifEmpty { current.phMin },
                 phMax = etPhMax.text.toString().trim().ifEmpty { current.phMax },
-                tdsMin = etTdsMin.text.toString().trim().ifEmpty { current.tdsMin },
-                tdsMax = etTdsMax.text.toString().trim().ifEmpty { current.tdsMax },
+                tdsMin = etEcMin.text.toString().trim().ifEmpty { current.tdsMin },
+                tdsMax = etEcMax.text.toString().trim().ifEmpty { current.tdsMax },
                 tempMin = etTempMin.text.toString().trim().ifEmpty { current.tempMin },
                 tempMax = etTempMax.text.toString().trim().ifEmpty { current.tempMax },
                 humMin = etHumMin.text.toString().trim().ifEmpty { current.humMin },

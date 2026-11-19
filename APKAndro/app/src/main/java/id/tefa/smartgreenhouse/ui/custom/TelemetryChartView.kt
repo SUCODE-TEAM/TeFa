@@ -370,7 +370,7 @@ class TelemetryChartView @JvmOverloads constructor(
     ) {
         val rows = mutableListOf<Triple<Int, String, String>>()
         if (showEc) {
-            rows.add(Triple(0xFF0D2818.toInt(), "EC / TDS", String.format(Locale.US, "%.2f mS/cm", pt.ec)))
+            rows.add(Triple(0xFF0D2818.toInt(), "EC", String.format(Locale.US, "%.2f mS/cm", pt.ec)))
         }
         if (showPh) {
             rows.add(Triple(0xFF1B4332.toInt(), "pH", String.format(Locale.US, "%.2f pH", pt.ph)))

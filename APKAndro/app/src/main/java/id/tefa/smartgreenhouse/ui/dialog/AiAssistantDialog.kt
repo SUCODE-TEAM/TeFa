@@ -114,7 +114,7 @@ class AiAssistantDialog(
         renderExistingHistory()
 
         if (chatHistory.isEmpty()) {
-            val welcome = "Halo! Saya Asisten AI Greenhouse TeFa. Tanyakan kondisi pH, TDS, suhu air, atau cuaca greenhouse."
+            val welcome = "Halo! Saya Asisten AI Greenhouse TeFa. Tanyakan kondisi pH, EC, suhu air, atau cuaca greenhouse."
             addBotBubble("AI", welcome, autoSpeak = false, saveToHistory = true)
         }
 
@@ -129,7 +129,7 @@ class AiAssistantDialog(
             stopListening()
             chatHistory.clear()
             messagesLayout.removeAllViews()
-            orbTranscript.text = "Ketuk orb untuk mulai bertanya dengan suara mengenai kondisi pH, TDS, suhu, atau cuaca."
+            orbTranscript.text = "Ketuk orb untuk mulai bertanya dengan suara mengenai kondisi pH, EC, suhu, atau cuaca."
         }
         btnVoiceOrb.setOnClickListener {
             if (orbModeActive) switchToChatMode() else switchToOrbMode()

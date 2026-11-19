@@ -172,6 +172,8 @@ id setBtnReset
 id setBtnSave
 id set_ai_api_key
 id set_ai_provider
+id set_ec_max
+id set_ec_min
 id set_ec_target
 id set_hum_max
 id set_hum_min
@@ -184,8 +186,6 @@ id set_ph_down_dose
 id set_ph_max
 id set_ph_min
 id set_ph_up_dose
-id set_tds_max
-id set_tds_min
 id set_temp_max
 id set_temp_min
 id settingBtnClose

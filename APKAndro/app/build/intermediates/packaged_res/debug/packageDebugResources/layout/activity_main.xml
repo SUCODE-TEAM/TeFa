@@ -411,7 +411,7 @@
                     </LinearLayout>
                 </LinearLayout>
 
-                <!-- Row 2 of Hardware Tiles: Sensor TDS, BH1750, Relay 8CH -->
+                <!-- Row 2 of Hardware Tiles: Sensor EC, BH1750, Relay 8CH -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -444,7 +444,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="4dp"
-                                android:text="Sensor TDS"
+                                android:text="Sensor EC"
                                 android:textColor="@color/tefa_white_78"
                                 android:textSize="11sp" />
                         </LinearLayout>
@@ -1100,7 +1100,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="TDS"
+                        android:text="EC"
                         android:textColor="@color/tefa_g9"
                         android:textSize="13sp"
                         android:textStyle="bold" />
@@ -1361,7 +1361,7 @@
                         android:background="@drawable/bg_pill_chip"
                         android:gravity="center"
                         android:paddingHorizontal="10dp"
-                        android:text="● TDS"
+                        android:text="● EC"
                         android:textColor="@color/tefa_g9"
                         android:textSize="11.5sp"
                         android:textStyle="bold" />

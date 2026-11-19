@@ -295,8 +295,8 @@
         if (!gearBtn || !backdrop) return;
 
         var defaultSettings = {
-            phMin: '5,5', phMax: '6,5',
-            tdsMin: '600', tdsMax: '1200',
+            phMin: '5.5', phMax: '6.5',
+            ecMin: '1.0', ecMax: '2.5',
             tempMin: '20', tempMax: '30',
             humMin: '50', humMax: '85',
             interval: '3',
@@ -304,13 +304,19 @@
             apiKey: ''
         };
 
+        function normalizeEcThresholdValue(raw, fallback) {
+            var num = parseFloat(String(raw || '').replace(',', '.'));
+            if (isNaN(num) || num < 0 || num > 20) return fallback;
+            return String(raw).trim();
+        }
+
         function loadSettings() {
             try {
                 var saved = JSON.parse(localStorage.getItem('tefa_dashboard_settings') || '{}');
                 if (document.getElementById('set_ph_min')) document.getElementById('set_ph_min').value = saved.phMin || defaultSettings.phMin;
                 if (document.getElementById('set_ph_max')) document.getElementById('set_ph_max').value = saved.phMax || defaultSettings.phMax;
-                if (document.getElementById('set_tds_min')) document.getElementById('set_tds_min').value = saved.tdsMin || defaultSettings.tdsMin;
-                if (document.getElementById('set_tds_max')) document.getElementById('set_tds_max').value = saved.tdsMax || defaultSettings.tdsMax;
+                if (document.getElementById('set_ec_min')) document.getElementById('set_ec_min').value = normalizeEcThresholdValue(saved.ecMin || saved.tdsMin, defaultSettings.ecMin);
+                if (document.getElementById('set_ec_max')) document.getElementById('set_ec_max').value = normalizeEcThresholdValue(saved.ecMax || saved.tdsMax, defaultSettings.ecMax);
                 if (document.getElementById('set_temp_min')) document.getElementById('set_temp_min').value = saved.tempMin || defaultSettings.tempMin;
                 if (document.getElementById('set_temp_max')) document.getElementById('set_temp_max').value = saved.tempMax || defaultSettings.tempMax;
                 if (document.getElementById('set_hum_min')) document.getElementById('set_hum_min').value = saved.humMin || defaultSettings.humMin;
@@ -388,8 +394,8 @@
             resetBtn.addEventListener('click', function () {
                 document.getElementById('set_ph_min').value = defaultSettings.phMin;
                 document.getElementById('set_ph_max').value = defaultSettings.phMax;
-                document.getElementById('set_tds_min').value = defaultSettings.tdsMin;
-                document.getElementById('set_tds_max').value = defaultSettings.tdsMax;
+                if (document.getElementById('set_ec_min')) document.getElementById('set_ec_min').value = defaultSettings.ecMin;
+                if (document.getElementById('set_ec_max')) document.getElementById('set_ec_max').value = defaultSettings.ecMax;
                 document.getElementById('set_temp_min').value = defaultSettings.tempMin;
                 document.getElementById('set_temp_max').value = defaultSettings.tempMax;
                 document.getElementById('set_hum_min').value = defaultSettings.humMin;
@@ -406,8 +412,8 @@
                 var newSettings = {
                     phMin: document.getElementById('set_ph_min').value.trim(),
                     phMax: document.getElementById('set_ph_max').value.trim(),
-                    tdsMin: document.getElementById('set_tds_min').value.trim(),
-                    tdsMax: document.getElementById('set_tds_max').value.trim(),
+                    ecMin: document.getElementById('set_ec_min') ? document.getElementById('set_ec_min').value.trim() : defaultSettings.ecMin,
+                    ecMax: document.getElementById('set_ec_max') ? document.getElementById('set_ec_max').value.trim() : defaultSettings.ecMax,
                     tempMin: document.getElementById('set_temp_min').value.trim(),
                     tempMax: document.getElementById('set_temp_max').value.trim(),
                     humMin: document.getElementById('set_hum_min').value.trim(),
@@ -599,6 +605,9 @@
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.cancel();
             }
+            if (window.AndroidBridge && typeof window.AndroidBridge.stopSpeaking === 'function') {
+                try { window.AndroidBridge.stopSpeaking(); } catch (e) { }
+            }
             isSpeaking = false;
             resetSpeakButtons();
             if (!isListening) {
@@ -608,7 +617,10 @@
         }
 
         function speakText(text, btnEl) {
-            if (!('speechSynthesis' in window) || !text) return;
+            if (!text) return;
+            var hasWebSpeech = ('speechSynthesis' in window);
+            var hasAndroidTts = !!(window.AndroidBridge && typeof window.AndroidBridge.speakText === 'function');
+            if (!hasWebSpeech && !hasAndroidTts) return;
 
             var clickedSameActive = btnEl && activeSpeakBtn === btnEl && isSpeaking;
             stopSpeaking();
@@ -616,6 +628,32 @@
 
             var cleanText = String(text).replace(/\s+/g, ' ').trim();
             if (!cleanText) return;
+
+            if (!hasWebSpeech && hasAndroidTts) {
+                isSpeaking = true;
+                if (btnEl) {
+                    activeSpeakBtn = btnEl;
+                    btnEl.classList.add('speaking');
+                    var spanElA = btnEl.querySelector('span');
+                    if (spanElA) spanElA.textContent = 'Berhenti';
+                }
+                if (!isListening) {
+                    orbMode = 'speaking';
+                    setOrbStatus('AI Sedang Berbicara...', 'is-speaking');
+                }
+                try {
+                    window.AndroidBridge.speakText(cleanText);
+                } catch (e) { }
+                setTimeout(function () {
+                    isSpeaking = false;
+                    resetSpeakButtons();
+                    if (!isListening) {
+                        orbMode = 'idle';
+                        setOrbStatus('Ketuk Orb untuk Bicara', '');
+                    }
+                }, Math.min(12000, Math.max(2500, cleanText.length * 65)));
+                return;
+            }
 
             var utterance = new SpeechSynthesisUtterance(cleanText);
             if (!preferredVoice) preferredVoice = resolveIndonesianVoice();
@@ -918,7 +956,7 @@
             var lower = text.toLowerCase();
             var t = readDashboardTelemetry();
 
-            if (lower.includes('ph') || lower.includes('nutrisi') || lower.includes('tds') || lower.includes('ec') || lower.includes('cahaya') || lower.includes('lux')) {
+            if (lower.includes('ph') || lower.includes('nutrisi') || lower.includes('ec') || lower.includes('cahaya') || lower.includes('lux')) {
                 return 'Pembacaan sensor saat ini: ' + t.sensorsSummary + '. Suhu air tercatat ' + t.waterTemp + '.';
             }
             if (lower.includes('suhu') || lower.includes('cuaca') || lower.includes('kelembaban') || lower.includes('kelembapan') || lower.includes('aws')) {
@@ -1868,7 +1906,7 @@
                     alert('Tidak ada data sensor untuk diekspor!');
                     return;
                 }
-                var headers = ['Time', 'pH', 'ppm', 'water temp (C)', 'LIGHT (lx)', 'humidity', 'Status'];
+                var headers = ['Time', 'pH', 'EC', 'water temp (C)', 'LIGHT (lx)', 'humidity', 'Status'];
                 var csvContent = [headers.join(',')];
                 sensorHistoryData.forEach(function (row) {
                     var line = [
@@ -1882,11 +1920,17 @@
                     ].join(',');
                     csvContent.push(line);
                 });
-                var blob = new Blob([csvContent.join('\\r\\n')], { type: 'text/csv;charset=utf-8;' });
+                var filename = 'data_sensor_tefa_' + new Date().toISOString().slice(0, 10) + '.csv';
+                var csvString = csvContent.join('\r\n');
+                if (window.AndroidBridge && typeof window.AndroidBridge.downloadCsv === 'function') {
+                    window.AndroidBridge.downloadCsv(filename, csvString);
+                    return;
+                }
+                var blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
                 var url = URL.createObjectURL(blob);
                 var a = document.createElement('a');
                 a.href = url;
-                a.download = 'data_sensor_tefa_' + new Date().toISOString().slice(0, 10) + '.csv';
+                a.download = filename;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -2232,6 +2276,17 @@
             if (backdrop.classList.contains('open')) {
                 currentNotifPage = 1;
                 renderList();
+            }
+            if (window.AndroidBridge && typeof window.AndroidBridge.postNotification === 'function') {
+                try {
+                    window.AndroidBridge.postNotification(
+                        String(item.title || 'Notifikasi Sensor TeFa'),
+                        String(item.desc || ''),
+                        String(item.value || ''),
+                        item.type === 'warning',
+                        String(item.time || '')
+                    );
+                } catch (e) { }
             }
         };
 

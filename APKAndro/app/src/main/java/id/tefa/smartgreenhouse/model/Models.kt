@@ -124,8 +124,8 @@ data class AuthSession(
 data class ParsedThresholds(
     val phMin: Double,
     val phMax: Double,
-    val tdsMin: Double,
-    val tdsMax: Double,
+    val ecMin: Double,
+    val ecMax: Double,
     val tempMin: Double,
     val tempMax: Double,
     val humMin: Double,
@@ -135,8 +135,8 @@ data class ParsedThresholds(
 data class DashboardSettings(
     val phMin: String = "5.5",
     val phMax: String = "6.5",
-    val tdsMin: String = "600",
-    val tdsMax: String = "1200",
+    val tdsMin: String = "1.0",
+    val tdsMax: String = "2.5",
     val tempMin: String = "20",
     val tempMax: String = "30",
     val humMin: String = "50",
@@ -159,11 +159,13 @@ data class DashboardSettings(
     val apiKey: String = ""
 ) {
     fun parsedThresholds(): ParsedThresholds {
+        val rawEcMin = tdsMin.replace(",", ".").toDoubleOrNull()
+        val rawEcMax = tdsMax.replace(",", ".").toDoubleOrNull()
         return ParsedThresholds(
             phMin = phMin.replace(",", ".").toDoubleOrNull() ?: 5.5,
             phMax = phMax.replace(",", ".").toDoubleOrNull() ?: 6.5,
-            tdsMin = tdsMin.replace(",", ".").toDoubleOrNull() ?: 600.0,
-            tdsMax = tdsMax.replace(",", ".").toDoubleOrNull() ?: 1200.0,
+            ecMin = if (rawEcMin != null && rawEcMin in 0.0..20.0) rawEcMin else 1.0,
+            ecMax = if (rawEcMax != null && rawEcMax > 0.0 && rawEcMax <= 20.0) rawEcMax else 2.5,
             tempMin = tempMin.replace(",", ".").toDoubleOrNull() ?: 20.0,
             tempMax = tempMax.replace(",", ".").toDoubleOrNull() ?: 30.0,
             humMin = humMin.replace(",", ".").toDoubleOrNull() ?: 50.0,
@@ -704,6 +706,10 @@ object NotificationBuilder {
         if (phVal != null && (phVal < thr.phMin || phVal > thr.phMax)) {
             issues.add("pH")
             details.add(String.format(Locale.US, "pH %.2f (batas %.1f–%.1f)", phVal, thr.phMin, thr.phMax))
+        }
+        if (ecVal != null && (ecVal < thr.ecMin || ecVal > thr.ecMax)) {
+            issues.add("EC")
+            details.add(String.format(Locale.US, "EC %.2f mS/cm (batas %.1f–%.1f)", ecVal, thr.ecMin, thr.ecMax))
         }
         if (wtVal != null && (wtVal < thr.tempMin || wtVal > thr.tempMax)) {
             issues.add("Suhu Air")

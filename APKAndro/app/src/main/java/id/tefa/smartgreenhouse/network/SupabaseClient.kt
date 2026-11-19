@@ -66,6 +66,7 @@ object SupabaseClient {
                         !r.optBoolean("status", true)
                     } else {
                         (phVal != null && (phVal < thresholds.phMin || phVal > thresholds.phMax)) ||
+                            (ppmVal != null && (ppmVal < thresholds.ecMin || ppmVal > thresholds.ecMax)) ||
                             (wtVal != null && (wtVal < thresholds.tempMin || wtVal > thresholds.tempMax)) ||
                             (humVal != null && (humVal < thresholds.humMin || humVal > thresholds.humMax))
                     }
@@ -256,6 +257,7 @@ object SupabaseClient {
                 payload.light != null || payload.airHum != null
             ) {
                 val isWarn = (payload.ph != null && (payload.ph < thresholds.phMin || payload.ph > thresholds.phMax)) ||
+                    (payload.ec != null && (payload.ec < thresholds.ecMin || payload.ec > thresholds.ecMax)) ||
                     (payload.waterTemp != null && (payload.waterTemp < thresholds.tempMin || payload.waterTemp > thresholds.tempMax)) ||
                     (payload.airHum != null && (payload.airHum < thresholds.humMin || payload.airHum > thresholds.humMax))
 

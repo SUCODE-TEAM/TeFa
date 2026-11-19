@@ -95,7 +95,7 @@ object AiAssistantClient {
 
     fun generateLocalFallbackReply(userText: String, t: TelemetrySummarySnapshot): String {
         val lower = userText.lowercase()
-        if (lower.contains("ph") || lower.contains("nutrisi") || lower.contains("tds") ||
+        if (lower.contains("ph") || lower.contains("nutrisi") ||
             lower.contains("ec") || lower.contains("cahaya") || lower.contains("lux")
         ) {
             return "Pembacaan sensor saat ini: ${t.sensorsSummary}. Suhu air tercatat ${t.waterTemp}."

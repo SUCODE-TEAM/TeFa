@@ -95,12 +95,12 @@
                     android:textSize="13.5sp" />
             </LinearLayout>
 
-            <!-- TDS Min / Max -->
+            <!-- EC Min / Max -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="4dp"
-                android:text="TDS (PPM) Min / Max"
+                android:text="EC (mS/cm) Min / Max"
                 android:textColor="@color/tefa_g9"
                 android:textSize="12.5sp"
                 android:textStyle="bold" />
@@ -113,7 +113,7 @@
                 android:orientation="horizontal">
 
                 <EditText
-                    android:id="@+id/set_tds_min"
+                    android:id="@+id/set_ec_min"
                     android:layout_width="0dp"
                     android:layout_height="42dp"
                     android:layout_weight="1"
@@ -131,7 +131,7 @@
                     android:textStyle="bold" />
 
                 <EditText
-                    android:id="@+id/set_tds_max"
+                    android:id="@+id/set_ec_max"
                     android:layout_width="0dp"
                     android:layout_height="42dp"
                     android:layout_weight="1"

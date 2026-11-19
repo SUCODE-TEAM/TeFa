@@ -171,6 +171,8 @@ int id setBtnReset 0x0
 int id setBtnSave 0x0
 int id set_ai_api_key 0x0
 int id set_ai_provider 0x0
+int id set_ec_max 0x0
+int id set_ec_min 0x0
 int id set_ec_target 0x0
 int id set_hum_max 0x0
 int id set_hum_min 0x0
@@ -183,8 +185,6 @@ int id set_ph_down_dose 0x0
 int id set_ph_max 0x0
 int id set_ph_min 0x0
 int id set_ph_up_dose 0x0
-int id set_tds_max 0x0
-int id set_tds_min 0x0
 int id set_temp_max 0x0
 int id set_temp_min 0x0
 int id settingBtnClose 0x0

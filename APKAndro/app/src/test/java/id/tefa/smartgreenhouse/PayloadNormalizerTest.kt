@@ -1,11 +1,14 @@
 package id.tefa.smartgreenhouse
 
+import id.tefa.smartgreenhouse.model.DashboardSettings
+import id.tefa.smartgreenhouse.model.NotificationBuilder
 import id.tefa.smartgreenhouse.model.PayloadNormalizer
 import id.tefa.smartgreenhouse.model.TelemetryLogPoint
 import id.tefa.smartgreenhouse.model.TimeRangeAggregator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PayloadNormalizerTest {
@@ -89,5 +92,26 @@ class PayloadNormalizerTest {
         val res24J = TimeRangeAggregator.getSeriesForRange(log, "24J")
         assertEquals(1, res24J.points.size)
         assertEquals(6.3, res24J.points[0].ph, 0.01)
+    }
+
+    @Test
+    fun ecOutOfRangeTriggersWarningNotification() {
+        val thr = DashboardSettings().parsedThresholds()
+        assertEquals(1.0, thr.ecMin, 0.001)
+        assertEquals(2.5, thr.ecMax, 0.001)
+
+        val notif = NotificationBuilder.buildSensorNotificationItem(
+            phVal = 6.0,
+            ecVal = 3.10,
+            wtVal = 25.0,
+            humVal = 65.0,
+            thr = thr,
+            timeText = "09:15:00 WIB",
+            forceWarn = false
+        )
+        assertEquals("warning", notif.type)
+        assertTrue(notif.title.contains("EC"))
+        assertTrue(notif.desc.contains("EC 3.10 mS/cm"))
+        assertTrue(notif.value.contains("EC: 3.10 mS/cm"))
     }
 }

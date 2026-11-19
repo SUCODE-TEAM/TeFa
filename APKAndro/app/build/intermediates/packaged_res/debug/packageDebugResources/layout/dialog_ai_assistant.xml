@@ -182,7 +182,7 @@
             android:gravity="center"
             android:minHeight="44dp"
             android:paddingHorizontal="8dp"
-            android:text="Ketuk orb untuk mulai bertanya dengan suara mengenai kondisi pH, TDS, suhu, atau cuaca."
+            android:text="Ketuk orb untuk mulai bertanya dengan suara mengenai kondisi pH, EC, suhu, atau cuaca."
             android:textColor="@color/tefa_mute"
             android:textSize="13sp" />
 
