@@ -1,4 +1,4 @@
-#Thu Nov 19 09:24:52 WIB 2026
+#Thu Nov 19 09:55:27 WIB 2026
 base.0=D\:\\Isro\\TeFa\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeExtDexDebug\\classes.dex
 base.1=D\:\\Isro\\TeFa\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\0\\classes.dex
 base.2=D\:\\Isro\\TeFa\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\10\\classes.dex

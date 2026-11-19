@@ -118,18 +118,33 @@
             var arr = JSON.parse(raw);
             if (!Array.isArray(arr)) return [];
             var cutoff = Date.now() - 30 * 24 * 3600 * 1000;
-            return arr.filter(function (item) { return item && item.ts >= cutoff; }).slice(-2000);
+            return arr.filter(function (item) { return item && item.ts >= cutoff; }).slice(-600);
         } catch (e) {
             return [];
         }
     }
 
-    function saveTelemetryLog() {
+    var saveTelemetryTimer = null;
+    function flushTelemetryLog() {
+        saveTelemetryTimer = null;
         try {
-            localStorage.setItem(STORAGE_KEY_LOG, JSON.stringify(telemetryLog.slice(-2000)));
+            localStorage.setItem(STORAGE_KEY_LOG, JSON.stringify(telemetryLog.slice(-600)));
         } catch (e) {
             // ignore quota errors
         }
+    }
+
+    function saveTelemetryLog(immediate) {
+        if (immediate) {
+            if (saveTelemetryTimer) {
+                clearTimeout(saveTelemetryTimer);
+                saveTelemetryTimer = null;
+            }
+            flushTelemetryLog();
+            return;
+        }
+        if (saveTelemetryTimer) return;
+        saveTelemetryTimer = setTimeout(flushTelemetryLog, 3000);
     }
 
     function getWibDateParts(ts) {
@@ -297,7 +312,7 @@
             '.chart-hover-layer { position: absolute; pointer-events: none; z-index: 5; overflow: visible; }',
             '.chart-crosshair { position: absolute; top: 0; bottom: 0; width: 1.5px; background: repeating-linear-gradient(to bottom, rgba(13,40,24,0.45) 0 4px, transparent 4px 8px); opacity: 0; transition: left 0.08s ease-out, opacity 0.15s ease; }',
             '.chart-dot { position: absolute; width: 11px; height: 11px; border-radius: 50%; border: 2.5px solid #fff; transform: translate(-50%, -50%); opacity: 0; transition: left 0.08s ease-out, top 0.08s ease-out, opacity 0.15s ease; box-shadow: 0 2px 6px rgba(2,2,2,0.22); }',
-            '.chart-tooltip { position: absolute; min-width: 185px; background: rgba(255,255,255,0.96); backdrop-filter: blur(10px); border: none; border-radius: 12px; padding: 10px 13px; box-shadow: 0 16px 38px rgba(9,24,15,0.20), 0 4px 12px rgba(2,2,2,0.08); font-size: 12px; color: #0D2818; pointer-events: none; z-index: 10; opacity: 0; transition: left 0.08s ease-out, top 0.08s ease-out, opacity 0.15s ease; }',
+            '.chart-tooltip { position: absolute; min-width: 185px; background: rgba(255,255,255,0.98); border: none; border-radius: 12px; padding: 10px 13px; box-shadow: 0 12px 28px rgba(9,24,15,0.18), 0 4px 10px rgba(2,2,2,0.08); font-size: 12px; color: #0D2818; pointer-events: none; z-index: 10; opacity: 0; transition: left 0.08s ease-out, top 0.08s ease-out, opacity 0.15s ease; }',
             '.chart-tooltip-time { font-weight: 700; font-size: 11px; color: #0D2818; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid #EBF0ED; letter-spacing: 0.3px; }',
             '.chart-tooltip-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 3px 0; font-weight: 500; }',
             '.chart-tooltip-label { display: flex; align-items: center; gap: 6px; color: #4A5D52; }',
@@ -649,14 +664,14 @@
             cancelAnimationFrame(chartState.animFrameId);
         }
 
-        if (!fromPts) {
+        if (!fromPts || document.hidden) {
             chartState.paths.ec.setAttribute('d', buildSmoothPath(target.ec, h, false));
             chartState.paths.area.setAttribute('d', buildSmoothPath(target.ec, h, true));
             chartState.paths.ph.setAttribute('d', buildSmoothPath(target.ph, h, false));
             chartState.paths.temp.setAttribute('d', buildSmoothPath(target.temp, h, false));
         } else {
             var startTime = null;
-            var duration = 450;
+            var duration = 280;
 
             function step(ts) {
                 if (!startTime) startTime = ts;
@@ -1083,7 +1098,7 @@
         if (telemetryHistory.length > 15) telemetryHistory.shift();
 
         telemetryLog.push(logEntry);
-        if (telemetryLog.length > 2000) telemetryLog.shift();
+        if (telemetryLog.length > 600) telemetryLog.shift();
         saveTelemetryLog();
 
         renderTelemetryChart();
@@ -1108,7 +1123,8 @@
                 airHum ? airHum.value : null,
                 thr,
                 wibTime + ' WIB',
-                overallStatus === 'Warning'
+                overallStatus === 'Warning',
+                Date.now()
             );
             if (liveNotif.type === 'warning' || lastNotifStatus !== 'normal') {
                 window.addSensorNotification(liveNotif);
@@ -1299,7 +1315,7 @@
         return isToday ? t : (formatShortDate(d.getTime()) + ' ' + t);
     }
 
-    function buildSensorNotificationItem(phVal, ecVal, wtVal, humVal, thr, timeText, forceWarn) {
+    function buildSensorNotificationItem(phVal, ecVal, wtVal, humVal, thr, timeText, forceWarn, tsMs) {
         var issues = [];
         var details = [];
         if (phVal !== null && (phVal < thr.phMin || phVal > thr.phMax)) {
@@ -1326,8 +1342,14 @@
         if (humVal !== null) parts.push('RH: ' + humVal.toFixed(1) + '%');
         var valSummary = parts.length ? parts.join(' · ') : 'N/A';
 
-        if (issues.length > 0 || forceWarn) {
+        var numericTs = (typeof tsMs === 'number' && !isNaN(tsMs) && tsMs > 0) ? tsMs : Date.now();
+        var notifType = (issues.length > 0 || forceWarn) ? 'warning' : 'normal';
+        var stableId = numericTs + '|' + notifType + '|' + valSummary;
+
+        if (notifType === 'warning') {
             return {
+                id: stableId,
+                ts: numericTs,
                 type: 'warning',
                 tag: 'PERINGATAN',
                 time: timeText,
@@ -1342,6 +1364,8 @@
         }
 
         return {
+            id: stableId,
+            ts: numericTs,
             type: 'normal',
             tag: 'NORMAL',
             time: timeText,
@@ -1353,6 +1377,7 @@
 
     var lastSupabaseSyncAt = 0;
     var supabaseSyncInFlight = false;
+    var lastSupabaseFingerprint = '';
 
     function refreshHistoryFromSupabase(force) {
         var now = Date.now();
@@ -1364,8 +1389,8 @@
     function loadHistoryFromSupabase() {
         supabaseSyncInFlight = true;
         Promise.all([
-            fetchSupabaseRows(SUPABASE_CONFIG.sensorTable, 1000),
-            fetchSupabaseRows(SUPABASE_CONFIG.awsTable, 500)
+            fetchSupabaseRows(SUPABASE_CONFIG.sensorTable, 300),
+            fetchSupabaseRows(SUPABASE_CONFIG.awsTable, 250)
         ]).then(function (results) {
             supabaseSyncInFlight = false;
             lastSupabaseSyncAt = Date.now();
@@ -1374,6 +1399,16 @@
             var sensorRows = sensorOk ? results[0] : [];
             var awsRows = awsOk ? results[1] : [];
             var thr = getThresholds();
+
+            var thrSig = [thr.phMin, thr.phMax, thr.ecMin, thr.ecMax, thr.tempMin, thr.tempMax, thr.humMin, thr.humMax].join(',');
+            var firstSensor = sensorRows[0] ? (sensorRows[0].waktu + '|' + sensorRows[0].PH + '|' + sensorRows[0].PPM) : '';
+            var lastSensor = sensorRows.length > 1 ? (sensorRows[sensorRows.length - 1].waktu || '') : '';
+            var firstAws = awsRows[0] ? (awsRows[0].waktu + '|' + awsRows[0].temperatur + '|' + awsRows[0].radiasi) : '';
+            var fp = sensorOk + ':' + sensorRows.length + ':' + firstSensor + ':' + lastSensor + '|' + awsOk + ':' + awsRows.length + ':' + firstAws + '|' + thrSig;
+            if (fp === lastSupabaseFingerprint) {
+                return;
+            }
+            lastSupabaseFingerprint = fp;
 
             if (sensorOk && typeof window.setSensorHistoryData === 'function') {
                 var mappedSensor = sensorRows.map(function (r) {
@@ -1408,6 +1443,8 @@
                     var wtVal = toSensorNumber(r.Suhu_air);
                     var humVal = toSensorNumber(r.kelembapan);
                     var rowWarn = typeof r.status === 'boolean' ? !r.status : false;
+                    var rowTs = r.waktu ? new Date(r.waktu).getTime() : 0;
+                    if (isNaN(rowTs)) rowTs = 0;
                     return buildSensorNotificationItem(
                         phVal,
                         ppmVal,
@@ -1415,7 +1452,8 @@
                         humVal,
                         thr,
                         formatDisplayTimeWithDate(r.waktu) + ' WIB',
-                        rowWarn
+                        rowWarn,
+                        rowTs
                     );
                 });
                 window.setSensorNotifications(historyNotifs);
@@ -1493,7 +1531,8 @@
             }
 
             if (sensorOk) {
-                telemetryLog = sensorRows.map(function (r) {
+                var cappedRows = sensorRows.slice(0, 600);
+                telemetryLog = cappedRows.map(function (r) {
                     var ts = r.waktu ? new Date(r.waktu).getTime() : Date.now();
                     if (isNaN(ts)) ts = Date.now();
                     return {
@@ -1953,8 +1992,9 @@
         initChartControls();
         loadHistoryFromSupabase();
         setInterval(function () {
+            if (document.hidden) return;
             refreshHistoryFromSupabase(true);
-        }, 15000);
+        }, 30000);
         initMqttClient();
 
         window.addEventListener('storage', function (e) {

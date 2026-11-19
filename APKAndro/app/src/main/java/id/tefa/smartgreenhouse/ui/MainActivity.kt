@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
+import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.JsResult
 import android.webkit.PermissionRequest
@@ -35,6 +36,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var webView: WebView
     private var textToSpeech: TextToSpeech? = null
     private var isTtsReady = false
+    private var isTtsInitializing = false
+    private var pendingSpeakText: String? = null
 
     private var pendingCsvContent: String? = null
     private var pendingCsvFilename: String = "data_sensor_tefa.csv"
@@ -96,8 +99,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         WhatsAppNotificationHelper.ensureChannels(this)
         requestNotificationPermissionIfNeeded()
 
-        textToSpeech = TextToSpeech(this, this)
-
         val rootContainer = FrameLayout(this).apply {
             setBackgroundColor(Color.parseColor("#EEF2F0"))
         }
@@ -154,6 +155,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     @SuppressLint("SetJavaScriptEnabled", "AllowAllFileAccess")
     private fun configureWebView() {
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        webView.scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
+        }
+
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -170,6 +177,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             displayZoomControls = false
             mediaPlaybackRequiresUserGesture = false
             cacheMode = WebSettings.LOAD_DEFAULT
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                offscreenPreRaster = true
+            }
         }
 
         webView.addJavascriptInterface(AndroidBridge(), "AndroidBridge")
@@ -237,7 +247,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
+    private fun initTtsIfNeeded() {
+        if (textToSpeech == null && !isTtsInitializing) {
+            isTtsInitializing = true
+            textToSpeech = TextToSpeech(this, this)
+        }
+    }
+
     override fun onInit(status: Int) {
+        isTtsInitializing = false
         if (status == TextToSpeech.SUCCESS) {
             val idLocale = Locale.Builder().setLanguage("id").setRegion("ID").build()
             val res = textToSpeech?.setLanguage(idLocale)
@@ -245,13 +263,27 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 textToSpeech?.language = Locale.getDefault()
             }
             isTtsReady = true
+            val queued = pendingSpeakText
+            pendingSpeakText = null
+            if (!queued.isNullOrBlank()) {
+                textToSpeech?.speak(queued, TextToSpeech.QUEUE_FLUSH, null, "tefa_ai_tts")
+            }
+        } else {
+            pendingSpeakText = null
         }
     }
 
     override fun onDestroy() {
+        pendingSpeakText = null
         textToSpeech?.stop()
         textToSpeech?.shutdown()
+        textToSpeech = null
         if (this::webView.isInitialized) {
+            webView.removeJavascriptInterface("AndroidBridge")
+            webView.stopLoading()
+            webView.loadUrl("about:blank")
+            webView.clearHistory()
+            (webView.parent as? android.view.ViewGroup)?.removeView(webView)
             webView.destroy()
         }
         super.onDestroy()
@@ -284,6 +316,43 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
 
         @JavascriptInterface
+        fun clearSystemNotifications() {
+            runOnUiThread {
+                lastNotifStatus = null
+                WhatsAppNotificationHelper.clearAllNotifications(this@MainActivity)
+            }
+        }
+
+        @JavascriptInterface
+        fun scheduleTestNotification(delayMs: Long) {
+            val safeDelay = if (delayMs in 500L..15_000L) delayMs else 3_000L
+            val sec = ((safeDelay + 500L) / 1000L).coerceAtLeast(1L)
+            runOnUiThread {
+                if (!WhatsAppNotificationHelper.hasNotificationPermission(this@MainActivity)) {
+                    requestNotificationPermissionIfNeeded()
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Izinkan notifikasi terlebih dahulu agar Test Notif muncul di bar HP.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@runOnUiThread
+                }
+                Toast.makeText(
+                    this@MainActivity,
+                    "Test notifikasi dikirim dalam $sec detik...",
+                    Toast.LENGTH_SHORT
+                ).show()
+                WhatsAppNotificationHelper.scheduleTestNotification(
+                    context = this@MainActivity,
+                    delayMs = safeDelay,
+                    title = "Test Notifikasi TeFa Greenhouse",
+                    desc = "Notifikasi uji berhasil masuk ke bar HP (delay $sec detik). Sistem peringatan sensor siap digunakan.",
+                    valueSummary = "pH: 6.20 · EC: 1.65 mS/cm · Air: 25.4°C"
+                )
+            }
+        }
+
+        @JavascriptInterface
         fun downloadCsv(filename: String?, csvContent: String?) {
             val safeName = filename?.takeIf { it.isNotBlank() } ?: "data_sensor_tefa.csv"
             val content = csvContent ?: return
@@ -298,8 +367,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         fun speakText(text: String?) {
             val clean = text?.trim()?.takeIf { it.isNotEmpty() } ?: return
             runOnUiThread {
-                if (isTtsReady) {
+                if (isTtsReady && textToSpeech != null) {
                     textToSpeech?.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "tefa_ai_tts")
+                } else {
+                    pendingSpeakText = clean
+                    initTtsIfNeeded()
                 }
             }
         }
@@ -307,6 +379,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         @JavascriptInterface
         fun stopSpeaking() {
             runOnUiThread {
+                pendingSpeakText = null
                 textToSpeech?.stop()
             }
         }

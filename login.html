@@ -279,7 +279,7 @@
             opacity: 0;
             visibility: hidden;
             pointer-events: none;
-            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.25s ease;
         }
 
         .login-toast.show {
@@ -340,7 +340,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.15s ease;
+            transition: background-color 0.15s ease, border-color 0.15s ease;
             flex-shrink: 0;
         }
 
@@ -444,7 +444,8 @@
             gap: 8px;
             text-decoration: none;
             box-shadow: 0 6px 18px rgba(9, 24, 15, 0.10), 0 2px 6px rgba(2, 2, 2, 0.06);
-            transition: all 0.15s ease;
+            touch-action: manipulation;
+            transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
             box-sizing: border-box;
         }
 
@@ -498,9 +499,7 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            background: rgba(255, 255, 255, 0.94);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            background: rgba(255, 255, 255, 0.96);
             border: none;
             padding: 6px 16px;
             border-radius: 999px;
@@ -518,7 +517,8 @@
             gap: 5px;
             padding: 4px 8px;
             border-radius: 6px;
-            transition: all 0.15s ease;
+            touch-action: manipulation;
+            transition: color 0.15s ease, background-color 0.15s ease;
         }
 
         .link-viewer:hover {
@@ -541,7 +541,8 @@
             gap: 4px;
             padding: 3px 6px;
             border-radius: 4px;
-            transition: all 0.15s ease;
+            touch-action: manipulation;
+            transition: color 0.15s ease, background-color 0.15s ease;
         }
 
         .demo-chip:hover {

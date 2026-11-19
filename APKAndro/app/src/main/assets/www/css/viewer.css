@@ -1195,53 +1195,37 @@ h2.sec {
 
 .ai-chat-popup.open {
     display: flex;
-    animation: circleExpandToChat .42s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: circleExpandToChat .22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform, opacity;
 }
 
 .ai-chat-popup.closing {
     display: flex;
-    animation: chatShrinkToCircle .32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation: chatShrinkToCircle .20s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    will-change: transform, opacity;
 }
 
 @keyframes circleExpandToChat {
     0% {
-        clip-path: circle(31px at calc(100% - 31px) 31px);
-        border-radius: 50%;
-        opacity: 0.9;
-        transform: scale(0.15);
-    }
-
-    40% {
-        border-radius: 20px;
-        opacity: 1;
+        opacity: 0;
+        transform: translate3d(0, -10px, 0) scale(0.92);
     }
 
     100% {
-        clip-path: circle(150% at calc(100% - 31px) 31px);
-        border-radius: 10px;
         opacity: 1;
-        transform: scale(1);
+        transform: translate3d(0, 0, 0) scale(1);
     }
 }
 
 @keyframes chatShrinkToCircle {
     0% {
-        clip-path: circle(150% at calc(100% - 31px) 31px);
-        border-radius: 10px;
         opacity: 1;
-        transform: scale(1);
-    }
-
-    60% {
-        border-radius: 24px;
-        opacity: 0.95;
+        transform: translate3d(0, 0, 0) scale(1);
     }
 
     100% {
-        clip-path: circle(31px at calc(100% - 31px) 31px);
-        border-radius: 50%;
         opacity: 0;
-        transform: scale(0.15);
+        transform: translate3d(0, -10px, 0) scale(0.92);
     }
 }
 
@@ -1753,7 +1737,7 @@ h2.sec {
     height: 380px;
     display: block;
     border-radius: 50%;
-    filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.34));
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.34);
     transition: transform .22s ease;
 }
 
@@ -1979,59 +1963,42 @@ h2.sec {
 }
 
 .setting-modal-backdrop.open .setting-modal {
-    animation: circleExpandSetting .42s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: circleExpandSetting .22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform, opacity;
 }
 
 .setting-modal-backdrop.closing .setting-modal {
-    animation: settingShrinkToCircle .32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation: settingShrinkToCircle .20s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    will-change: transform, opacity;
 }
 
 .setting-modal-backdrop.open .setting-header,
 .setting-modal-backdrop.open .setting-body,
 .setting-modal-backdrop.open .setting-footer {
-    animation: modalContentFadeIn .3s ease .12s forwards;
-    opacity: 0;
+    animation: modalContentFadeIn .22s ease forwards;
 }
 
 @keyframes circleExpandSetting {
     0% {
-        clip-path: circle(31px at calc(100% - 31px) 31px);
-        border-radius: 50%;
-        opacity: 0.9;
-        transform: scale(0.15);
-    }
-
-    40% {
-        border-radius: 20px;
-        opacity: 1;
+        opacity: 0;
+        transform: translate3d(0, -10px, 0) scale(0.94);
     }
 
     100% {
-        clip-path: circle(150% at calc(100% - 31px) 31px);
-        border-radius: 10px;
         opacity: 1;
-        transform: scale(1);
+        transform: translate3d(0, 0, 0) scale(1);
     }
 }
 
 @keyframes settingShrinkToCircle {
     0% {
-        clip-path: circle(150% at calc(100% - 31px) 31px);
-        border-radius: 10px;
         opacity: 1;
-        transform: scale(1);
-    }
-
-    60% {
-        border-radius: 24px;
-        opacity: 0.95;
+        transform: translate3d(0, 0, 0) scale(1);
     }
 
     100% {
-        clip-path: circle(30px at 50% 50%);
-        border-radius: 50%;
         opacity: 0;
-        transform: scale(0.2);
+        transform: translate3d(0, -10px, 0) scale(0.94);
     }
 }
 
@@ -2370,60 +2337,43 @@ h2.sec {
 }
 
 .notif-modal-backdrop.open .notif-modal {
-    animation: circleExpandNotif .42s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: circleExpandNotif .22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform, opacity;
 }
 
 .notif-modal-backdrop.closing .notif-modal {
-    animation: notifShrinkToCircle .32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation: notifShrinkToCircle .20s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    will-change: transform, opacity;
 }
 
 .notif-modal-backdrop.open .notif-header,
 .notif-modal-backdrop.open .notif-header-divider,
 .notif-modal-backdrop.open .notif-tabs,
 .notif-modal-backdrop.open .notif-list {
-    animation: modalContentFadeIn .3s ease .12s forwards;
-    opacity: 0;
+    animation: modalContentFadeIn .22s ease forwards;
 }
 
 @keyframes circleExpandNotif {
     0% {
-        clip-path: circle(31px at calc(100% - 31px) 31px);
-        border-radius: 50%;
-        opacity: 0.9;
-        transform: scale(0.15);
-    }
-
-    40% {
-        border-radius: 16px;
-        opacity: 1;
+        opacity: 0;
+        transform: translate3d(0, -10px, 0) scale(0.94);
     }
 
     100% {
-        clip-path: circle(150% at calc(100% - 31px) 31px);
-        border-radius: 6px;
         opacity: 1;
-        transform: scale(1);
+        transform: translate3d(0, 0, 0) scale(1);
     }
 }
 
 @keyframes notifShrinkToCircle {
     0% {
-        clip-path: circle(150% at calc(100% - 31px) 31px);
-        border-radius: 6px;
         opacity: 1;
-        transform: scale(1);
-    }
-
-    60% {
-        border-radius: 20px;
-        opacity: 0.95;
+        transform: translate3d(0, 0, 0) scale(1);
     }
 
     100% {
-        clip-path: circle(30px at 50% 50%);
-        border-radius: 50%;
         opacity: 0;
-        transform: scale(0.2);
+        transform: translate3d(0, -10px, 0) scale(0.94);
     }
 }
 
@@ -2431,6 +2381,7 @@ h2.sec {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
+    gap: 12px;
 }
 
 .notif-header-text {
@@ -2453,6 +2404,49 @@ h2.sec {
     color: #4A5D52;
     margin-top: 4px;
     line-height: 1.3;
+}
+
+.notif-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.notif-btn-clear {
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 8px;
+    background: #FDECEC;
+    border: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #B42318;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    touch-action: manipulation;
+    transition: background-color .2s ease, transform .15s ease, opacity .2s ease;
+    flex-shrink: 0;
+}
+
+.notif-btn-clear:hover:not(:disabled) {
+    background: #FCD8D8;
+    transform: translateY(-1px);
+}
+
+.notif-btn-clear:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.notif-btn-clear svg {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
 }
 
 .notif-btn-close {
@@ -2523,6 +2517,55 @@ h2.sec {
     color: #FFFFFF;
     font-weight: 700;
     padding: 0 16px;
+}
+
+.notif-btn-test {
+    margin-left: auto;
+    height: 28px;
+    padding: 0 11px;
+    border-radius: 999px;
+    background: #E8F5EE;
+    color: #1B4332;
+    border: 1px solid #C6E3D3;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    touch-action: manipulation;
+    flex-shrink: 0;
+    transition: background-color .18s ease, color .18s ease, border-color .18s ease, transform .15s ease;
+}
+
+.notif-btn-test svg {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+}
+
+.notif-btn-test:hover:not(:disabled) {
+    background: #D7EFE2;
+    border-color: #9ED1B7;
+    transform: translateY(-1px);
+}
+
+.notif-btn-test:disabled {
+    cursor: not-allowed;
+    transform: none;
+}
+
+.notif-btn-test.is-counting {
+    background: #FEF3C7;
+    color: #92400E;
+    border-color: #FDE68A;
+}
+
+.notif-btn-test.is-sent {
+    background: #DCFCE7;
+    color: #166534;
+    border-color: #86EFAC;
 }
 
 .notif-list {
@@ -2618,6 +2661,7 @@ h2.sec {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
     margin-bottom: 6px;
 }
 
@@ -2629,10 +2673,43 @@ h2.sec {
     text-transform: uppercase;
 }
 
+.notif-card-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
 .notif-card-time {
     font-size: 11.5px;
     font-weight: 500;
     color: #4A5D52;
+}
+
+.notif-card-delete {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: 0;
+    background: #F1F5F3;
+    color: #4A5D52;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    padding: 0;
+    touch-action: manipulation;
+    transition: background-color .18s ease, color .18s ease, transform .15s ease;
+}
+
+.notif-card-delete:hover {
+    background: #FDECEC;
+    color: #B42318;
+    transform: scale(1.06);
+}
+
+.notif-card-delete svg {
+    width: 13px;
+    height: 13px;
 }
 
 .notif-card-title {
@@ -3510,5 +3587,64 @@ body {
 @media (prefers-reduced-motion: reduce) {
     .parallax-card::after {
         display: none !important;
+    }
+}
+
+/* ================= ANDROID & MOBILE PERFORMANCE OPTIMIZATIONS ================= */
+.top-row {
+    transform: translateZ(0);
+}
+
+.card {
+    contain: layout style;
+}
+
+.hwc,
+.awsc,
+.notif-card {
+    contain: layout style paint;
+}
+
+.card.chart,
+.card.tcard,
+.hwcards,
+.awsgrid {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 320px;
+}
+
+.nav-links a,
+.nav-user,
+.gear,
+.notif-btn,
+.ai-assistant-btn,
+.tabs button,
+.btn,
+.notif-tab,
+.notif-btn-close,
+.notif-card-delete,
+.notif-btn-clear {
+    touch-action: manipulation;
+}
+
+.notif-tab {
+    transition: background-color .2s ease, color .2s ease;
+}
+
+@media (max-width: 1024px), (hover: none) {
+    .ai-voice-orb-topbar,
+    .ai-orb-resize-handle,
+    .mobile-nav-backdrop {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+
+    .ai-voice-orb-topbar,
+    .ai-orb-resize-handle {
+        background: rgba(11, 18, 14, 0.94);
+    }
+
+    .mobile-nav-backdrop {
+        background: rgba(6, 20, 8, 0.52);
     }
 }

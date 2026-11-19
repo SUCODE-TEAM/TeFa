@@ -466,47 +466,49 @@
         });
     });
 
-    // Single unified scroll listener
-    window.addEventListener('scroll', function () {
-        var topRow = document.querySelector('.top-row');
-        if (topRow) {
-            if (window.scrollY > 15) {
-                topRow.classList.add('scrolled');
-            } else {
-                topRow.classList.remove('scrolled');
-            }
+    // Single unified rAF-throttled scroll listener
+    var cachedTopRow = null;
+    var cachedSpyElements = null;
+    var lastScrolledState = false;
+    var scrollTicking = false;
+
+    function updateScrollState() {
+        scrollTicking = false;
+        if (!cachedTopRow) cachedTopRow = document.querySelector('.top-row');
+        var scrollY = window.pageYOffset || window.scrollY || 0;
+        var nextScrolled = scrollY > 15;
+        if (cachedTopRow && nextScrolled !== lastScrolledState) {
+            lastScrolledState = nextScrolled;
+            cachedTopRow.classList.toggle('scrolled', nextScrolled);
         }
 
         if (isUserNavClick) return;
 
-        var topRowHeight = topRow ? topRow.offsetHeight : 80;
+        var topRowHeight = cachedTopRow ? cachedTopRow.offsetHeight : 80;
         var threshold = topRowHeight + 110;
         var currentId = 'top';
 
         // Check if user scrolled to bottom of page (forcing AWS)
-        var scrollBottom = window.innerHeight + window.pageYOffset;
-        var docHeight = Math.max(
-            document.body.scrollHeight,
-            document.documentElement.scrollHeight,
-            document.body.offsetHeight,
-            document.documentElement.offsetHeight
-        );
+        var scrollBottom = window.innerHeight + scrollY;
+        var docHeight = document.documentElement.scrollHeight || document.body.scrollHeight;
         var isAtBottom = scrollBottom >= (docHeight - 70);
 
         if (isAtBottom) {
             currentId = 'aws';
-        } else if (window.pageYOffset < 60) {
+        } else if (scrollY < 60) {
             currentId = 'top';
         } else {
-            spySectionIds.forEach(function (id) {
-                var el = document.getElementById(id);
-                if (el) {
-                    var r = el.getBoundingClientRect();
-                    if (r.top <= threshold) {
-                        currentId = id;
-                    }
+            if (!cachedSpyElements) {
+                cachedSpyElements = spySectionIds.map(function (id) {
+                    return { id: id, el: document.getElementById(id) };
+                }).filter(function (item) { return !!item.el; });
+            }
+            for (var i = 0; i < cachedSpyElements.length; i++) {
+                var item = cachedSpyElements[i];
+                if (item.el.getBoundingClientRect().top <= threshold) {
+                    currentId = item.id;
                 }
-            });
+            }
         }
 
         if (currentId !== currentNavSection) {
@@ -514,10 +516,17 @@
         } else if (navIndicator && (!navIndicator.style.width || navIndicator.style.width === '0px')) {
             moveNavIndicator();
         }
+    }
+
+    window.addEventListener('scroll', function () {
+        if (scrollTicking) return;
+        scrollTicking = true;
+        window.requestAnimationFrame(updateScrollState);
     }, { passive: true });
 
-    // AOS (Animate On Scroll) Initialization & Staggered Card Setup
+    // AOS (Animate On Scroll) Initialization & Lightweight Card Reveal Setup
     function initScrollReveal() {
+        var isCompactTouch = window.innerWidth <= 900 || ('ontouchstart' in window);
         ['.row2', '.row3', '.relay-sec', '.hwcards', '.awsgrid'].forEach(function (sel) {
             document.querySelectorAll(sel).forEach(function (el) {
                 el.removeAttribute('data-aos');
@@ -531,8 +540,9 @@
             if (!el.getAttribute('data-aos')) {
                 el.setAttribute('data-aos', anim || 'fade-up');
             }
-            if (delay && !el.getAttribute('data-aos-delay')) {
-                el.setAttribute('data-aos-delay', String(delay));
+            var resolvedDelay = isCompactTouch ? 0 : (delay || 0);
+            if (resolvedDelay && !el.getAttribute('data-aos-delay')) {
+                el.setAttribute('data-aos-delay', String(resolvedDelay));
             }
         }
 
@@ -541,25 +551,25 @@
         });
 
         document.querySelectorAll('.row2 .weather').forEach(function (el) {
-            applyAOS(el, 'fade-up', 60);
+            applyAOS(el, 'fade-up', 40);
         });
         document.querySelectorAll('.row2 .sensor').forEach(function (el, idx) {
-            applyAOS(el, 'fade-up', 100 + idx * 80);
+            applyAOS(el, 'fade-up', 60 + idx * 50);
         });
 
         document.querySelectorAll('.row3 > .card').forEach(function (el, idx) {
-            applyAOS(el, 'fade-up', idx * 100);
+            applyAOS(el, 'fade-up', idx * 60);
         });
 
         document.querySelectorAll('.relay-head').forEach(function (el) {
             applyAOS(el, 'fade-up', 0);
         });
         document.querySelectorAll('.relay-card').forEach(function (el, idx) {
-            applyAOS(el, 'zoom-in-up', (idx % 4) * 70);
+            applyAOS(el, 'zoom-in-up', (idx % 4) * 50);
         });
 
         document.querySelectorAll('.card.chart, .card.tcard').forEach(function (el, idx) {
-            applyAOS(el, 'fade-up', idx * 80);
+            applyAOS(el, 'fade-up', idx * 50);
         });
 
         document.querySelectorAll('#hardware, .awsbar').forEach(function (el) {
@@ -567,11 +577,11 @@
         });
 
         document.querySelectorAll('.hwcards .hwc').forEach(function (el, idx) {
-            applyAOS(el, 'fade-up', idx * 75);
+            applyAOS(el, 'fade-up', idx * 50);
         });
 
         document.querySelectorAll('.awsgrid .awsc').forEach(function (el, idx) {
-            applyAOS(el, 'fade-up', (idx % 2) * 90);
+            applyAOS(el, 'fade-up', (idx % 2) * 50);
         });
 
         document.querySelectorAll('footer').forEach(function (el) {
@@ -580,11 +590,13 @@
 
         if (window.AOS) {
             window.AOS.init({
-                duration: 750,
+                duration: 360,
                 easing: 'ease-out-cubic',
-                once: false,
-                mirror: true,
-                offset: 50,
+                once: true,
+                mirror: false,
+                offset: 24,
+                throttleDelay: 99,
+                debounceDelay: 50,
                 anchorPlacement: 'top-bottom'
             });
             window.addEventListener('load', function () {
@@ -713,7 +725,7 @@
                 backdrop.classList.remove('open');
                 backdrop.classList.remove('closing');
                 gearBtn.classList.remove('hidden');
-            }, 320);
+            }, 220);
         }
 
         gearBtn.style.cursor = 'pointer';
@@ -1114,6 +1126,50 @@
             window.speechSynthesis.speak(utterance);
         }
 
+        var cachedOrbGrid = null;
+        var cachedOrbGrad = null;
+        var cachedOrbKey = '';
+
+        function getOrbCache(ctx, w, h, R, step) {
+            var key = w + 'x' + h + ':' + step;
+            if (cachedOrbGrid && cachedOrbGrad && cachedOrbKey === key) {
+                return { grid: cachedOrbGrid, grad: cachedOrbGrad };
+            }
+            var cx = w * 0.5;
+            var cy = h * 0.5;
+            var sphereRadius = R * 1.06;
+            var grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, sphereRadius);
+            grad.addColorStop(0, 'rgba(6, 10, 8, 0.94)');
+            grad.addColorStop(0.58, 'rgba(6, 10, 8, 0.88)');
+            grad.addColorStop(0.86, 'rgba(6, 10, 8, 0.56)');
+            grad.addColorStop(1, 'rgba(6, 10, 8, 0)');
+
+            var pts = [];
+            for (var dy = -R; dy <= R; dy += step) {
+                for (var dx = -R; dx <= R; dx += step) {
+                    var r = Math.sqrt(dx * dx + dy * dy);
+                    if (r > R) continue;
+                    var u = r / R;
+                    var theta = Math.atan2(dy, dx);
+                    pts.push({
+                        px: cx + dx,
+                        py: cy + dy,
+                        u: u,
+                        isCore: u < 0.12,
+                        edgeFade: u > 0.9 ? Math.max(0.15, (1 - u) / 0.1) : 1,
+                        cos3: Math.cos(theta * 3),
+                        sin3: Math.sin(theta * 3),
+                        cos5: Math.cos(theta * 5),
+                        sin5: Math.sin(theta * 5)
+                    });
+                }
+            }
+            cachedOrbKey = key;
+            cachedOrbGrid = pts;
+            cachedOrbGrad = grad;
+            return { grid: pts, grad: grad };
+        }
+
         // Render Halftone Concentric Ring Voice Orb on Pure Black Canvas
         function renderVoiceOrbFrame() {
             if (!orbCanvas || !voicePanel || !voicePanel.classList.contains('open')) {
@@ -1129,7 +1185,8 @@
             var cx = w * 0.5;
             var cy = h * 0.5;
             var R = Math.min(w, h) * 0.44;
-            var step = 6;
+            var step = (window.innerWidth <= 768 || ('ontouchstart' in window)) ? 8 : 6;
+            var orbCache = getOrbCache(ctx, w, h, R, step);
 
             ctx.clearRect(0, 0, w, h);
 
@@ -1159,68 +1216,69 @@
 
             // Soft circular dark sphere strictly within orb radius so outside remains transparent
             var sphereRadius = R * 1.06;
-            var sphereGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, sphereRadius);
-            sphereGrad.addColorStop(0, 'rgba(6, 10, 8, 0.94)');
-            sphereGrad.addColorStop(0.58, 'rgba(6, 10, 8, 0.88)');
-            sphereGrad.addColorStop(0.86, 'rgba(6, 10, 8, 0.56)');
-            sphereGrad.addColorStop(1, 'rgba(6, 10, 8, 0)');
             ctx.beginPath();
             ctx.arc(cx, cy, sphereRadius, 0, Math.PI * 2);
-            ctx.fillStyle = sphereGrad;
+            ctx.fillStyle = orbCache.grad;
             ctx.fill();
 
             // Translucent center grey core disk (under dot grid so grid dots remain visible across it)
             var coreRadius = (0.125 + smoothedEnergy * 0.024) * R;
             ctx.beginPath();
             ctx.arc(cx, cy, coreRadius, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(155, 158, 156, ' + (0.52 + smoothedEnergy * 0.16).toFixed(3) + ')';
+            ctx.fillStyle = '#9B9E9C';
+            ctx.globalAlpha = 0.52 + smoothedEnergy * 0.16;
             ctx.fill();
 
             // Orthogonal cartesian halftone dot matrix clipped inside circle radius R
             var ringCenter = 0.38 + smoothedEnergy * 0.042;
             var ringSpread = 0.082 + smoothedEnergy * 0.034;
+            var cosP = Math.cos(orbPhase);
+            var sinP = Math.sin(orbPhase);
+            var p5 = orbPhase * 1.35;
+            var cosP5 = Math.cos(p5);
+            var sinP5 = Math.sin(p5);
+            var amp3 = 0.012 + smoothedEnergy * 0.032;
+            var amp5 = 0.008 + smoothedEnergy * 0.022;
+            var coreHalf = 0.72 + smoothedEnergy * 0.35;
+            var coreAlpha = 0.42 + smoothedEnergy * 0.18;
+            var dotScale = 3.15 + smoothedEnergy * 1.1;
 
-            for (var dy = -R; dy <= R; dy += step) {
-                for (var dx = -R; dx <= R; dx += step) {
-                    var r = Math.sqrt(dx * dx + dy * dy);
-                    if (r > R) continue;
+            ctx.fillStyle = '#FFFFFF';
+            var grid = orbCache.grid;
+            for (var i = 0; i < grid.length; i++) {
+                var pt = grid[i];
+                var u = pt.u;
+                var halfSize;
+                var alpha;
 
-                    var u = r / R;
-                    var theta = Math.atan2(dy, dx);
-                    var angularWave =
-                        Math.sin(theta * 3 + orbPhase) * (0.012 + smoothedEnergy * 0.032) +
-                        Math.cos(theta * 5 - orbPhase * 1.35) * (0.008 + smoothedEnergy * 0.022);
+                if (pt.isCore) {
+                    halfSize = coreHalf;
+                    alpha = coreAlpha;
+                } else {
+                    var s3 = pt.sin3 * cosP + pt.cos3 * sinP;
+                    var c5 = pt.cos5 * cosP5 + pt.sin5 * sinP5;
+                    var localCenter = ringCenter + s3 * amp3 + c5 * amp5;
+                    var diff = (u - localCenter) / ringSpread;
+                    var ringVal = Math.exp(-diff * diff);
 
-                    var localCenter = ringCenter + angularWave;
-                    var ringVal = Math.exp(-Math.pow((u - localCenter) / ringSpread, 2));
-
-                    var outerFalloff = 0;
+                    var outerFalloff;
                     if (u > localCenter) {
                         var tOut = Math.min(1, (u - localCenter) / Math.max(0.01, 1 - localCenter));
                         outerFalloff = Math.pow(1 - tOut, 1.85) * 0.56;
                     } else {
                         var tIn = u / Math.max(0.01, localCenter);
-                        outerFalloff = (0.20 + 0.16 * tIn);
+                        outerFalloff = 0.20 + 0.16 * tIn;
                     }
 
                     var intensity = Math.min(1, ringVal * 1.18 + outerFalloff * 0.85);
-                    var edgeFade = u > 0.9 ? Math.max(0.15, (1 - u) / 0.1) : 1;
-
-                    // Compute halftone dot half-size: inside bright ring dots exceed step/2 so they merge smoothly
-                    var halfSize = 0.42 + Math.pow(intensity, 1.65) * (3.15 + smoothedEnergy * 1.1);
-                    if (u < 0.12) {
-                        halfSize = 0.72 + smoothedEnergy * 0.35;
-                    }
-
-                    var alpha = Math.min(1, (0.28 + Math.pow(intensity, 1.1) * 0.72) * edgeFade);
-                    if (u < 0.12) alpha = 0.42 + smoothedEnergy * 0.18;
-
-                    ctx.fillStyle = 'rgba(255, 255, 255, ' + alpha.toFixed(3) + ')';
-                    var px = cx + dx;
-                    var py = cy + dy;
-                    ctx.fillRect(px - halfSize, py - halfSize, halfSize * 2, halfSize * 2);
+                    halfSize = 0.42 + Math.pow(intensity, 1.65) * dotScale;
+                    alpha = Math.min(1, (0.28 + Math.pow(intensity, 1.1) * 0.72) * pt.edgeFade);
                 }
+
+                ctx.globalAlpha = alpha;
+                ctx.fillRect(pt.px - halfSize, pt.py - halfSize, halfSize * 2, halfSize * 2);
             }
+            ctx.globalAlpha = 1;
 
             orbRafId = window.requestAnimationFrame(renderVoiceOrbFrame);
         }
@@ -1927,7 +1985,7 @@
             aiPopup.classList.add('open');
             setTimeout(function () {
                 if (aiInput) aiInput.focus();
-            }, 400);
+            }, 240);
         }
 
         function closePopup() {
@@ -1941,7 +1999,7 @@
                 if (!voicePanel || !voicePanel.classList.contains('open')) {
                     aiBtn.classList.remove('hidden');
                 }
-            }, 320);
+            }, 220);
         }
 
         updateTtsToggleUI();
@@ -2493,6 +2551,9 @@
         var notifBtn = document.getElementById('notifBtn');
         var backdrop = document.getElementById('notifModalBackdrop');
         var closeBtn = document.getElementById('notifBtnClose');
+        var clearAllBtn = document.getElementById('notifBtnClearAll');
+        var testNotifBtn = document.getElementById('notifBtnTest');
+        var testNotifLabel = testNotifBtn ? testNotifBtn.querySelector('.notif-btn-test-label') : null;
         var tabBtns = document.querySelectorAll('#notifTabs .notif-tab');
         var listContainer = document.getElementById('notifList');
         var notifPagination = document.getElementById('notifPagination');
@@ -2502,11 +2563,101 @@
 
         if (!notifBtn || !backdrop) return;
 
+        var NOTIF_DELETED_IDS_KEY = 'tefa_notif_deleted_ids';
+        var NOTIF_CLEARED_AT_KEY = 'tefa_notif_cleared_at';
+
         var currentFilter = 'all';
         var currentNotifPage = 1;
         var notifsPerPage = 3;
         var notifications = [];
         var unreadCount = 0;
+        var isTestCountdownActive = false;
+
+        function formatNowWibTime() {
+            var d = new Date();
+            try {
+                var parts = new Intl.DateTimeFormat('en-GB', {
+                    timeZone: 'Asia/Jakarta',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                }).formatToParts(d);
+                var map = {};
+                parts.forEach(function (p) { map[p.type] = p.value; });
+                if (map.hour && map.minute && map.second) {
+                    return map.hour + ':' + map.minute + ':' + map.second + ' WIB';
+                }
+            } catch (e) { }
+            var hh = String(d.getHours()).padStart(2, '0');
+            var mm = String(d.getMinutes()).padStart(2, '0');
+            var ss = String(d.getSeconds()).padStart(2, '0');
+            return hh + ':' + mm + ':' + ss + ' WIB';
+        }
+
+        function getNotifClearedAt() {
+            try {
+                var raw = localStorage.getItem(NOTIF_CLEARED_AT_KEY);
+                var parsed = raw ? parseInt(raw, 10) : 0;
+                return isNaN(parsed) ? 0 : parsed;
+            } catch (e) {
+                return 0;
+            }
+        }
+
+        function setNotifClearedAt(ts) {
+            try {
+                localStorage.setItem(NOTIF_CLEARED_AT_KEY, String(ts || Date.now()));
+            } catch (e) { }
+        }
+
+        function getDeletedNotifList() {
+            try {
+                var raw = localStorage.getItem(NOTIF_DELETED_IDS_KEY);
+                var arr = raw ? JSON.parse(raw) : [];
+                return Array.isArray(arr) ? arr : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function getDeletedNotifSet() {
+            var list = getDeletedNotifList();
+            var set = Object.create(null);
+            for (var i = 0; i < list.length; i++) {
+                set[list[i]] = true;
+            }
+            return set;
+        }
+
+        function markNotifIdDeleted(notifId) {
+            if (!notifId) return;
+            try {
+                var list = getDeletedNotifList();
+                if (list.indexOf(notifId) === -1) {
+                    list.push(notifId);
+                    if (list.length > 250) list = list.slice(-250);
+                    localStorage.setItem(NOTIF_DELETED_IDS_KEY, JSON.stringify(list));
+                }
+            } catch (e) { }
+        }
+
+        function ensureNotifItemIdentity(item, idx) {
+            if (!item || typeof item !== 'object') return item;
+            if (typeof item.ts !== 'number' || isNaN(item.ts) || item.ts <= 0) {
+                item.ts = Date.now();
+            }
+            if (!item.id) {
+                item.id = item.ts + '|' + (item.type || 'normal') + '|' + (item.value || item.time || idx || '');
+            }
+            return item;
+        }
+
+        function updateClearAllBtnState() {
+            if (clearAllBtn) {
+                clearAllBtn.disabled = notifications.length === 0;
+            }
+        }
 
         var badgeEl = notifBtn.querySelector('.notif-badge');
         if (!badgeEl) {
@@ -2569,7 +2720,7 @@
                 backdrop.classList.remove('open');
                 backdrop.classList.remove('closing');
                 notifBtn.classList.remove('hidden');
-            }, 320);
+            }, 220);
         }
 
         notifBtn.addEventListener('click', function (e) {
@@ -2588,6 +2739,117 @@
             closeBtn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 closeModal();
+            });
+        }
+
+        if (clearAllBtn) {
+            clearAllBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                if (notifications.length === 0) return;
+                setNotifClearedAt(Date.now());
+                try {
+                    localStorage.removeItem(NOTIF_DELETED_IDS_KEY);
+                } catch (err) { }
+                notifications = [];
+                unreadCount = 0;
+                currentNotifPage = 1;
+                updateBadge();
+                renderList();
+                if (window.AndroidBridge && typeof window.AndroidBridge.clearSystemNotifications === 'function') {
+                    try {
+                        window.AndroidBridge.clearSystemNotifications();
+                    } catch (err) { }
+                }
+            });
+        }
+
+        if (testNotifBtn) {
+            testNotifBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                if (isTestCountdownActive) return;
+
+                isTestCountdownActive = true;
+                var remainingSec = 3;
+                testNotifBtn.disabled = true;
+                testNotifBtn.classList.remove('is-sent');
+                testNotifBtn.classList.add('is-counting');
+                if (testNotifLabel) {
+                    testNotifLabel.textContent = 'Tunggu ' + remainingSec + 'd...';
+                }
+
+                var usedNativeSchedule = !!(window.AndroidBridge && typeof window.AndroidBridge.scheduleTestNotification === 'function');
+                if (usedNativeSchedule) {
+                    try {
+                        window.AndroidBridge.scheduleTestNotification(3000);
+                    } catch (err) {
+                        usedNativeSchedule = false;
+                    }
+                } else if (typeof window.Notification !== 'undefined' && window.Notification.permission === 'default' && typeof window.Notification.requestPermission === 'function') {
+                    try {
+                        var permPromise = window.Notification.requestPermission();
+                        if (permPromise && typeof permPromise.catch === 'function') {
+                            permPromise.catch(function () { });
+                        }
+                    } catch (err) { }
+                }
+
+                var countdownTimer = setInterval(function () {
+                    remainingSec--;
+                    if (remainingSec > 0 && testNotifLabel) {
+                        testNotifLabel.textContent = 'Tunggu ' + remainingSec + 'd...';
+                    }
+                }, 1000);
+
+                setTimeout(function () {
+                    clearInterval(countdownTimer);
+                    var nowTs = Date.now();
+                    var timeText = formatNowWibTime();
+                    var testItem = {
+                        id: nowTs + '|warning|test-notif',
+                        ts: nowTs,
+                        type: 'warning',
+                        tag: 'TEST NOTIF',
+                        time: timeText,
+                        title: 'Test Notifikasi TeFa Greenhouse',
+                        desc: 'Notifikasi uji berhasil dikirim setelah jeda 3 detik.',
+                        value: 'pH: 6.20 · EC: 1.65 mS/cm · Air: 25.4°C'
+                    };
+
+                    notifications.unshift(testItem);
+                    if (notifications.length > 50) notifications.pop();
+                    updateClearAllBtnState();
+
+                    if (!backdrop.classList.contains('open')) {
+                        unreadCount++;
+                        updateBadge();
+                    } else {
+                        currentNotifPage = 1;
+                        renderList();
+                    }
+
+                    if (!usedNativeSchedule && typeof window.Notification !== 'undefined' && window.Notification.permission === 'granted') {
+                        try {
+                            new window.Notification(testItem.title, {
+                                body: testItem.desc + '\n' + testItem.value + ' (' + timeText + ')'
+                            });
+                        } catch (err) { }
+                    }
+
+                    testNotifBtn.classList.remove('is-counting');
+                    testNotifBtn.classList.add('is-sent');
+                    if (testNotifLabel) {
+                        testNotifLabel.textContent = 'Terkirim ✓';
+                    }
+
+                    setTimeout(function () {
+                        testNotifBtn.classList.remove('is-sent');
+                        testNotifBtn.disabled = false;
+                        if (testNotifLabel) {
+                            testNotifLabel.textContent = 'Test Notif (3d)';
+                        }
+                        isTestCountdownActive = false;
+                    }, 1200);
+                }, 3000);
             });
         }
 
@@ -2637,7 +2899,39 @@
             });
         }
 
+        if (listContainer) {
+            listContainer.addEventListener('click', function (e) {
+                var delBtn = e.target && e.target.closest ? e.target.closest('.notif-card-delete') : null;
+                if (!delBtn) return;
+                e.stopPropagation();
+                var encodedId = delBtn.getAttribute('data-notif-id') || '';
+                var targetId = '';
+                try {
+                    targetId = decodeURIComponent(encodedId);
+                } catch (err) {
+                    targetId = encodedId;
+                }
+                if (!targetId) return;
+
+                markNotifIdDeleted(targetId);
+                notifications = notifications.filter(function (n) { return n && n.id !== targetId; });
+                if (backdrop.classList.contains('open')) {
+                    unreadCount = 0;
+                } else {
+                    unreadCount = notifications.filter(function (n) { return n.type === 'warning'; }).length;
+                }
+                updateBadge();
+                renderList();
+                if (notifications.length === 0 && window.AndroidBridge && typeof window.AndroidBridge.clearSystemNotifications === 'function') {
+                    try {
+                        window.AndroidBridge.clearSystemNotifications();
+                    } catch (err) { }
+                }
+            });
+        }
+
         function renderList() {
+            updateClearAllBtnState();
             if (!listContainer) return;
             var filtered = notifications.filter(function (item) {
                 if (currentFilter === 'all') return true;
@@ -2667,13 +2961,19 @@
             var slice = filtered.slice(start, end);
 
             var html = '';
-            slice.forEach(function (item) {
+            slice.forEach(function (item, idx) {
+                ensureNotifItemIdentity(item, start + idx);
                 var cardCls = item.type === 'warning' ? ' is-warning' : ' is-normal';
                 html += [
                     '<div class="notif-card' + cardCls + '">',
                     '  <div class="notif-card-header">',
                     '    <span class="notif-card-tag">' + item.tag + '</span>',
-                    '    <span class="notif-card-time">' + item.time + '</span>',
+                    '    <div class="notif-card-meta">',
+                    '      <span class="notif-card-time">' + item.time + '</span>',
+                    '      <button type="button" class="notif-card-delete" data-notif-id="' + encodeURIComponent(item.id) + '" title="Hapus Notifikasi" aria-label="Hapus Notifikasi">',
+                    '        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><line x1="3" y1="3" x2="11" y2="11" /><line x1="11" y1="3" x2="3" y2="11" /></svg>',
+                    '      </button>',
+                    '    </div>',
                     '  </div>',
                     '  <h4 class="notif-card-title">' + item.title + '</h4>',
                     '  <p class="notif-card-desc">' + item.desc + '</p>',
@@ -2689,8 +2989,13 @@
 
         window.addSensorNotification = function (item) {
             if (!item || typeof item !== 'object') return;
+            ensureNotifItemIdentity(item, 0);
+            var deletedSet = getDeletedNotifSet();
+            if (deletedSet[item.id]) return;
+
             notifications.unshift(item);
             if (notifications.length > 50) notifications.pop();
+            updateClearAllBtnState();
             if (!backdrop.classList.contains('open') && item.type === 'warning') {
                 unreadCount++;
                 updateBadge();
@@ -2713,7 +3018,23 @@
         };
 
         window.setSensorNotifications = function (items) {
-            notifications = Array.isArray(items) ? items.slice(0, 50) : [];
+            var clearedAt = getNotifClearedAt();
+            var deletedSet = getDeletedNotifSet();
+            var nextList = [];
+            if (Array.isArray(items)) {
+                for (var i = 0; i < items.length; i++) {
+                    var item = items[i];
+                    if (!item || typeof item !== 'object') continue;
+                    var itemTs = (typeof item.ts === 'number' && !isNaN(item.ts)) ? item.ts : 0;
+                    if (clearedAt > 0 && itemTs <= clearedAt) continue;
+                    ensureNotifItemIdentity(item, i);
+                    if (deletedSet[item.id]) continue;
+                    nextList.push(item);
+                    if (nextList.length >= 50) break;
+                }
+            }
+            notifications = nextList;
+            updateClearAllBtnState();
             if (!backdrop.classList.contains('open')) {
                 unreadCount = notifications.filter(function (n) { return n.type === 'warning'; }).length;
                 updateBadge();
@@ -2722,6 +3043,8 @@
                 renderList();
             }
         };
+
+        updateClearAllBtnState();
     }
 
     function initAllWidgets() {

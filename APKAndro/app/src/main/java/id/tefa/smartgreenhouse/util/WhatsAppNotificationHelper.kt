@@ -11,11 +11,17 @@ import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import id.tefa.smartgreenhouse.R
 import id.tefa.smartgreenhouse.ui.MainActivity
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.atomic.AtomicInteger
 
 object WhatsAppNotificationHelper {
@@ -25,6 +31,9 @@ object WhatsAppNotificationHelper {
     private const val GROUP_KEY_ALERTS = "id.tefa.smartgreenhouse.SENSOR_ALERTS"
 
     private val notifCounter = AtomicInteger(2000)
+    private val mainHandler = Handler(Looper.getMainLooper())
+    @Volatile
+    private var pendingTestRunnable: Runnable? = null
     @Volatile
     private var lastAlertSignature: String = ""
     @Volatile
@@ -88,7 +97,8 @@ object WhatsAppNotificationHelper {
         desc: String,
         valueSummary: String,
         isWarning: Boolean,
-        timeText: String = ""
+        timeText: String = "",
+        bypassThrottle: Boolean = false
     ) {
         ensureChannels(context)
         if (!hasNotificationPermission(context)) return
@@ -111,7 +121,7 @@ object WhatsAppNotificationHelper {
 
         val now = System.currentTimeMillis()
         val sig = "$isWarning|$cleanTitle|$cleanDesc|$valueSummary"
-        if (sig == lastAlertSignature && (now - lastAlertTimeMs) < 5_000L) {
+        if (!bypassThrottle && sig == lastAlertSignature && (now - lastAlertTimeMs) < 5_000L) {
             return
         }
         lastAlertSignature = sig
@@ -198,5 +208,51 @@ object WhatsAppNotificationHelper {
             NotificationManagerCompat.from(context).notify(notifCounter.incrementAndGet(), notification)
         } catch (_: SecurityException) {
         }
+    }
+
+    fun scheduleTestNotification(
+        context: Context,
+        delayMs: Long = 3_000L,
+        title: String = "Test Notifikasi TeFa Greenhouse",
+        desc: String = "Notifikasi uji berhasil masuk ke bar HP (delay 3 detik). Sistem peringatan sensor siap digunakan.",
+        valueSummary: String = "pH: 6.20 · EC: 1.65 mS/cm · Air: 25.4°C",
+        timeText: String = ""
+    ) {
+        val appContext = context.applicationContext
+        ensureChannels(appContext)
+        pendingTestRunnable?.let { mainHandler.removeCallbacks(it) }
+
+        val safeDelay = delayMs.coerceIn(500L, 15_000L)
+        val runnable = Runnable {
+            pendingTestRunnable = null
+            val resolvedTime = timeText.ifBlank {
+                val fmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).apply {
+                    timeZone = TimeZone.getTimeZone("Asia/Jakarta")
+                }
+                fmt.format(Date()) + " WIB"
+            }
+            showSensorNotification(
+                context = appContext,
+                title = title,
+                desc = desc,
+                valueSummary = valueSummary,
+                isWarning = true,
+                timeText = resolvedTime,
+                bypassThrottle = true
+            )
+        }
+        pendingTestRunnable = runnable
+        mainHandler.postDelayed(runnable, safeDelay)
+    }
+
+    fun clearAllNotifications(context: Context) {
+        pendingTestRunnable?.let { mainHandler.removeCallbacks(it) }
+        pendingTestRunnable = null
+        try {
+            NotificationManagerCompat.from(context).cancelAll()
+        } catch (_: SecurityException) {
+        }
+        lastAlertSignature = ""
+        lastAlertTimeMs = 0L
     }
 }
