@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="tefa_bg">#EEF2F0</color>
+    <color name="tefa_black">#020202</color>
+    <color name="tefa_chart_temp">#6B9080</color>
+    <color name="tefa_g1">#EBF0ED</color>
+    <color name="tefa_g2">#D8E2DC</color>
+    <color name="tefa_g3">#A3C1B2</color>
+    <color name="tefa_g4">#2D6A4F</color>
+    <color name="tefa_g5">#1B4332</color>
+    <color name="tefa_g8">#123522</color>
+    <color name="tefa_g9">#0D2818</color>
+    <color name="tefa_ink">#0D2818</color>
+    <color name="tefa_input_bg">#F8FAFC</color>
+    <color name="tefa_input_border">#D1D5DB</color>
+    <color name="tefa_mute">#4A5D52</color>
+    <color name="tefa_ok_bg">#E8F5E9</color>
+    <color name="tefa_red">#BC2225</color>
+    <color name="tefa_red_bg">#FFEBEE</color>
+    <color name="tefa_red_dark">#B91C1C</color>
+    <color name="tefa_text_dark">#1E293B</color>
+    <color name="tefa_text_muted">#94A3B8</color>
+    <color name="tefa_warn">#E65100</color>
+    <color name="tefa_warn_bg">#FFF3E0</color>
+    <color name="tefa_white">#FFFFFF</color>
+    <color name="tefa_white_14">#24FFFFFF</color>
+    <color name="tefa_white_20">#33FFFFFF</color>
+    <color name="tefa_white_78">#C7FFFFFF</color>
+    <string name="app_name">TeFa Smart Greenhouse</string>
+    <string name="hardware_health">Hardware Health</string>
+    <string name="last_update">LAST UPDATE</string>
+    <string name="mode_admin">Admin</string>
+    <string name="mode_viewer">Viewer</string>
+    <string name="nav_aws">AWS</string>
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_hardware">Hardware</string>
+    <string name="nav_relay">Relay</string>
+    <string name="nav_telemetri">Telemetri</string>
+    <string name="school_title">Smart Greenhouse IoT</string>
+    <string name="status_disconnected">Terputus</string>
+    <string name="status_na">N/A</string>
+    <string name="status_offline">Offline</string>
+    <string name="status_online">Online</string>
+    <style name="Base.Theme.TeFaSmartGreenhouse" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/tefa_g9</item>
+        <item name="colorOnPrimary">@color/tefa_white</item>
+        <item name="colorSecondary">@color/tefa_g5</item>
+        <item name="colorOnSecondary">@color/tefa_white</item>
+        <item name="android:windowBackground">@color/tefa_bg</item>
+        <item name="android:statusBarColor">@color/tefa_g9</item>
+        <item name="android:navigationBarColor">@color/tefa_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+    <style name="Theme.TeFaSmartGreenhouse" parent="Base.Theme.TeFaSmartGreenhouse"/>
+</resources>

@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">TeFa Smart Greenhouse</string>
+    <string name="school_title">Smart Greenhouse IoT</string>
+    <string name="hardware_health">Hardware Health</string>
+    <string name="last_update">LAST UPDATE</string>
+    <string name="status_disconnected">Terputus</string>
+    <string name="status_offline">Offline</string>
+    <string name="status_online">Online</string>
+    <string name="status_na">N/A</string>
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_relay">Relay</string>
+    <string name="nav_telemetri">Telemetri</string>
+    <string name="nav_hardware">Hardware</string>
+    <string name="nav_aws">AWS</string>
+    <string name="mode_viewer">Viewer</string>
+    <string name="mode_admin">Admin</string>
+</resources>

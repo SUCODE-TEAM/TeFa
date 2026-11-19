@@ -1,0 +1,8 @@
+id.tefa.smartgreenhouse.app-pngs-0 D:\Isro\TeFa\APKAndro\app\build\generated\res\pngs\debug
+id.tefa.smartgreenhouse.app-updated_navigation_xml-1 D:\Isro\TeFa\APKAndro\app\build\generated\updated_navigation_xml\debug
+id.tefa.smartgreenhouse.app-packageDebugResources-2 D:\Isro\TeFa\APKAndro\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
+id.tefa.smartgreenhouse.app-packageDebugResources-3 D:\Isro\TeFa\APKAndro\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
+id.tefa.smartgreenhouse.app-debug-4 D:\Isro\TeFa\APKAndro\app\build\intermediates\merged_res\debug\mergeDebugResources
+id.tefa.smartgreenhouse.app-debug-5 D:\Isro\TeFa\APKAndro\app\src\debug\res
+id.tefa.smartgreenhouse.app-main-6 D:\Isro\TeFa\APKAndro\app\src\main\res
+gradleHome-0 D:\.gradle

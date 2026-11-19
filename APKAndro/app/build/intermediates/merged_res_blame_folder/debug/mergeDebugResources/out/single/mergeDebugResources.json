@@ -1,0 +1,238 @@
+[
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_user.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_user.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_eye_open.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_eye_open.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_ph_flask.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_ph_flask.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_bg_pill_chip.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/bg_pill_chip.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/xml_data_extraction_rules.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/xml/data_extraction_rules.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/mipmap-mdpi_ic_launcher.webp.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/mipmap-mdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_wifi.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_wifi.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_clock.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_clock.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_bg_input_box.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/bg_input_box.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_bg_relay_card_disabled.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/bg_relay_card_disabled.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_mic.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_mic.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_thermometer.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_thermometer.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_download_csv.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_download_csv.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/layout_activity_main.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/layout/activity_main.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_bg_circle_soft_green.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/bg_circle_soft_green.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/mipmap-xhdpi_ic_launcher.webp.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/mipmap-xhdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_bg_circle_btn.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/bg_circle_btn.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_bg_badge_warn.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/bg_badge_warn.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_sun_light.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_sun_light.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/layout_dialog_notifications.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/layout/dialog_notifications.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/mipmap-xxxhdpi_ic_launcher.webp.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/mipmap-xxxhdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_bg_hero_tile.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/bg_hero_tile.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_volume_on.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_volume_on.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_lock.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_lock.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_bg_hero.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/bg_hero.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_drop_tds.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_drop_tds.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_launcher_background.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_launcher_background.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/mipmap-hdpi_ic_launcher_round.webp.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/mipmap-hdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/mipmap-xhdpi_ic_launcher_round.webp.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/mipmap-xhdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_bg_pill_chip_active.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/bg_pill_chip_active.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/mipmap-xxxhdpi_ic_launcher_round.webp.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/mipmap-xxxhdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/layout_dialog_settings.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/layout/dialog_settings.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_power.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_power.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_bg_badge_online.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/bg_badge_online.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/xml_backup_rules.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/xml/backup_rules.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/mipmap-xxhdpi_ic_launcher.webp.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/mipmap-xxhdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_eye_slash.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_eye_slash.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/mipmap-hdpi_ic_launcher.webp.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/mipmap-hdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_sparkle_ai.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_sparkle_ai.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_sprout.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_sprout.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_plug_relay.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_plug_relay.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_send.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_send.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_bg_badge_offline.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/bg_badge_offline.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_bell.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_bell.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_close.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_close.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_bg_card.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/bg_card.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_volume_off.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_volume_off.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/layout_dialog_ai_assistant.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/layout/dialog_ai_assistant.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/mipmap-mdpi_ic_launcher_round.webp.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/mipmap-mdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_bg_nav_pill.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/bg_nav_pill.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/mipmap-xxhdpi_ic_launcher_round.webp.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/mipmap-xxhdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/layout_activity_login.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/layout/activity_login.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_bg_relay_card_off.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/bg_relay_card_off.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_history.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_history.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_ic_gear.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/ic_gear.xml"
+    },
+    {
+        "merged": "id.tefa.smartgreenhouse.app-debug-34:/drawable_bg_relay_card_on.xml.flat",
+        "source": "id.tefa.smartgreenhouse.app-main-36:/drawable/bg_relay_card_on.xml"
+    }
+]

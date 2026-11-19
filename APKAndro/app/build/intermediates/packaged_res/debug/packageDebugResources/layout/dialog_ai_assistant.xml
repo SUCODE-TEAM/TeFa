@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_card"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="AI Assistant"
+            android:textColor="@color/tefa_g9"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/aiBtnTtsToggle"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/bg_circle_btn"
+            android:contentDescription="Toggle Text to Speech"
+            android:padding="7dp"
+            android:src="@drawable/ic_volume_on" />
+
+        <ImageButton
+            android:id="@+id/aiBtnVoiceOrb"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/bg_pill_chip"
+            android:contentDescription="Mode Suara Voice Orb"
+            android:padding="7dp"
+            android:src="@drawable/ic_mic" />
+
+        <TextView
+            android:id="@+id/aiBtnClear"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/bg_pill_chip"
+            android:gravity="center"
+            android:paddingHorizontal="10dp"
+            android:text="Bersihkan"
+            android:textColor="@color/tefa_g9"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/aiBtnClose"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:background="@drawable/bg_pill_chip"
+            android:contentDescription="Tutup AI Assistant"
+            android:padding="8dp"
+            android:src="@drawable/ic_close" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginVertical="10dp"
+        android:background="@color/tefa_g1" />
+
+    <!-- Chat Mode Panel -->
+    <LinearLayout
+        android:id="@+id/aiChatContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <ScrollView
+            android:id="@+id/aiMessagesScroll"
+            android:layout_width="match_parent"
+            android:layout_height="320dp"
+            android:background="@color/tefa_bg"
+            android:padding="10dp">
+
+            <LinearLayout
+                android:id="@+id/aiChatMessages"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </ScrollView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/aiInput"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_input_box"
+                android:hint="Tanya analisis agronomi atau diagnosa..."
+                android:imeOptions="actionSend"
+                android:inputType="text"
+                android:maxLines="2"
+                android:paddingHorizontal="12dp"
+                android:textColor="@color/tefa_text_dark"
+                android:textColorHint="@color/tefa_text_muted"
+                android:textSize="13sp" />
+
+            <ImageButton
+                android:id="@+id/aiBtnMic"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_pill_chip"
+                android:contentDescription="Tanya lewat Suara"
+                android:padding="10dp"
+                android:src="@drawable/ic_mic" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/aiBtnSend"
+                android:layout_width="wrap_content"
+                android:layout_height="42dp"
+                android:layout_marginStart="6dp"
+                android:backgroundTint="@color/tefa_g9"
+                android:minWidth="0dp"
+                android:paddingHorizontal="14dp"
+                android:text="Kirim"
+                android:textAllCaps="false"
+                android:textColor="@color/tefa_white"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                app:cornerRadius="10dp"
+                app:icon="@drawable/ic_send"
+                app:iconGravity="end"
+                app:iconSize="14dp"
+                app:iconTint="@color/tefa_white" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Voice Orb Mode Panel -->
+    <LinearLayout
+        android:id="@+id/aiVoiceOrbPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingVertical="8dp"
+        android:visibility="gone">
+
+        <id.tefa.smartgreenhouse.ui.custom.VoiceOrbView
+            android:id="@+id/aiVoiceOrbView"
+            android:layout_width="220dp"
+            android:layout_height="220dp" />
+
+        <TextView
+            android:id="@+id/aiOrbStatusBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_pill_chip"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="5dp"
+            android:text="Ketuk Orb untuk Bicara"
+            android:textColor="@color/tefa_g9"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/aiOrbTranscript"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:minHeight="44dp"
+            android:paddingHorizontal="8dp"
+            android:text="Ketuk orb untuk mulai bertanya dengan suara mengenai kondisi pH, TDS, suhu, atau cuaca."
+            android:textColor="@color/tefa_mute"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/aiOrbSizeDownBtn"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="6dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minWidth="0dp"
+                android:padding="0dp"
+                android:text="-"
+                android:textColor="@color/tefa_g9"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                app:cornerRadius="20dp"
+                app:strokeColor="@color/tefa_g2" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/aiOrbSizeUpBtn"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="6dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minWidth="0dp"
+                android:padding="0dp"
+                android:text="+"
+                android:textColor="@color/tefa_g9"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                app:cornerRadius="20dp"
+                app:strokeColor="@color/tefa_g2" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/aiOrbMicBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:layout_marginEnd="6dp"
+                android:backgroundTint="@color/tefa_g9"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="14dp"
+                android:text="Bicara"
+                android:textAllCaps="false"
+                android:textColor="@color/tefa_white"
+                android:textSize="12.5sp"
+                android:textStyle="bold"
+                app:cornerRadius="20dp"
+                app:icon="@drawable/ic_mic"
+                app:iconSize="16dp"
+                app:iconTint="@color/tefa_white" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/aiOrbBackBtn"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="12dp"
+                android:text="Chat"
+                android:textAllCaps="false"
+                android:textColor="@color/tefa_g9"
+                android:textSize="12.5sp"
+                android:textStyle="bold"
+                app:cornerRadius="20dp"
+                app:strokeColor="@color/tefa_g2" />
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>

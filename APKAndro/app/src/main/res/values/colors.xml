@@ -1,0 +1,28 @@
+<resources>
+    <color name="tefa_black">#020202</color>
+    <color name="tefa_g9">#0D2818</color>
+    <color name="tefa_ink">#0D2818</color>
+    <color name="tefa_g8">#123522</color>
+    <color name="tefa_g5">#1B4332</color>
+    <color name="tefa_g4">#2D6A4F</color>
+    <color name="tefa_g3">#A3C1B2</color>
+    <color name="tefa_g2">#D8E2DC</color>
+    <color name="tefa_g1">#EBF0ED</color>
+    <color name="tefa_bg">#EEF2F0</color>
+    <color name="tefa_white">#FFFFFF</color>
+    <color name="tefa_mute">#4A5D52</color>
+    <color name="tefa_red">#BC2225</color>
+    <color name="tefa_red_dark">#B91C1C</color>
+    <color name="tefa_red_bg">#FFEBEE</color>
+    <color name="tefa_warn">#E65100</color>
+    <color name="tefa_warn_bg">#FFF3E0</color>
+    <color name="tefa_ok_bg">#E8F5E9</color>
+    <color name="tefa_chart_temp">#6B9080</color>
+    <color name="tefa_input_bg">#F8FAFC</color>
+    <color name="tefa_input_border">#D1D5DB</color>
+    <color name="tefa_text_dark">#1E293B</color>
+    <color name="tefa_text_muted">#94A3B8</color>
+    <color name="tefa_white_78">#C7FFFFFF</color>
+    <color name="tefa_white_14">#24FFFFFF</color>
+    <color name="tefa_white_20">#33FFFFFF</color>
+</resources>
