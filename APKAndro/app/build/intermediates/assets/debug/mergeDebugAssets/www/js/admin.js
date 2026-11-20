@@ -2556,12 +2556,133 @@
         var testNotifLabel = testNotifBtn ? testNotifBtn.querySelector('.notif-btn-test-label') : null;
         var tabBtns = document.querySelectorAll('#notifTabs .notif-tab');
         var listContainer = document.getElementById('notifList');
-        var notifPagination = document.getElementById('notifPagination');
-        var notifPaginationInfo = document.getElementById('notifPaginationInfo');
-        var notifPrevBtn = document.getElementById('notifPrevBtn');
-        var notifNextBtn = document.getElementById('notifNextBtn');
 
         if (!notifBtn || !backdrop) return;
+
+        // Jika berjalan di dalam APK Android (AndroidBridge terdeteksi), hapus tombol Test Notif
+        var isRunningInApk = !!(window.AndroidBridge);
+        if (isRunningInApk && testNotifBtn) {
+            testNotifBtn.remove();
+            testNotifBtn = null;
+            testNotifLabel = null;
+        }
+
+        var webAudioCtx = null;
+        function playNotificationChime() {
+            try {
+                var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContextClass) return;
+                if (!webAudioCtx) webAudioCtx = new AudioContextClass();
+                if (webAudioCtx.state === 'suspended') {
+                    webAudioCtx.resume();
+                }
+                var now = webAudioCtx.currentTime;
+                // Nada 1: D5 (587.33 Hz)
+                var osc1 = webAudioCtx.createOscillator();
+                var gain1 = webAudioCtx.createGain();
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(587.33, now);
+                gain1.gain.setValueAtTime(0.12, now);
+                gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+                osc1.connect(gain1);
+                gain1.connect(webAudioCtx.destination);
+                osc1.start(now);
+                osc1.stop(now + 0.16);
+
+                // Nada 2: A5 (880 Hz)
+                var osc2 = webAudioCtx.createOscillator();
+                var gain2 = webAudioCtx.createGain();
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(880, now + 0.12);
+                gain2.gain.setValueAtTime(0.14, now + 0.12);
+                gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+                osc2.connect(gain2);
+                gain2.connect(webAudioCtx.destination);
+                osc2.start(now + 0.12);
+                osc2.stop(now + 0.38);
+            } catch (err) { }
+        }
+
+        function showWebNotificationToast(item) {
+            if (!item || isRunningInApk) return;
+            var container = document.getElementById('webNotifToastContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'webNotifToastContainer';
+                container.className = 'web-notif-toast-container';
+                document.body.appendChild(container);
+            }
+
+            var toast = document.createElement('div');
+            toast.className = 'web-notif-toast';
+            toast.setAttribute('role', 'alert');
+
+            var header = document.createElement('div');
+            header.className = 'web-notif-toast-header';
+
+            var badge = document.createElement('span');
+            badge.className = 'web-notif-toast-badge';
+            badge.textContent = item.tag || 'NOTIFIKASI';
+            header.appendChild(badge);
+
+            var time = document.createElement('span');
+            time.className = 'web-notif-toast-time';
+            time.textContent = item.time || '';
+            header.appendChild(time);
+
+            var closeBtn = document.createElement('button');
+            closeBtn.className = 'web-notif-toast-close';
+            closeBtn.type = 'button';
+            closeBtn.setAttribute('aria-label', 'Tutup Notifikasi');
+            closeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="3" x2="11" y2="11"/><line x1="11" y1="3" x2="3" y2="11"/></svg>';
+            header.appendChild(closeBtn);
+
+            toast.appendChild(header);
+
+            var title = document.createElement('h4');
+            title.className = 'web-notif-toast-title';
+            title.textContent = item.title || 'Notifikasi Sensor';
+            toast.appendChild(title);
+
+            if (item.desc) {
+                var desc = document.createElement('p');
+                desc.className = 'web-notif-toast-desc';
+                desc.textContent = item.desc;
+                toast.appendChild(desc);
+            }
+
+            if (item.value) {
+                var val = document.createElement('span');
+                val.className = 'web-notif-toast-val';
+                val.textContent = item.value;
+                toast.appendChild(val);
+            }
+
+            var progress = document.createElement('div');
+            progress.className = 'web-notif-toast-progress';
+            toast.appendChild(progress);
+
+            function dismissToast() {
+                if (toast.classList.contains('is-hiding')) return;
+                toast.classList.add('is-hiding');
+                setTimeout(function () {
+                    if (toast.parentNode) toast.parentNode.removeChild(toast);
+                }, 260);
+            }
+
+            closeBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                dismissToast();
+            });
+
+            toast.addEventListener('click', function () {
+                dismissToast();
+                openModal();
+            });
+
+            container.appendChild(toast);
+            setTimeout(dismissToast, 6000);
+        }
 
         var NOTIF_DELETED_IDS_KEY = 'tefa_notif_deleted_ids';
         var NOTIF_CLEARED_AT_KEY = 'tefa_notif_cleared_at';
@@ -2594,6 +2715,29 @@
             var ss = String(d.getSeconds()).padStart(2, '0');
             return hh + ':' + mm + ':' + ss + ' WIB';
         }
+
+        var dummyInitialNotifs = [
+            {
+                id: 'dummy-sensor-warning-tefa',
+                ts: Date.now() - 1000 * 60 * 3,
+                type: 'warning',
+                tag: 'Suhu Tandon',
+                time: formatNowWibTime(),
+                title: 'Suhu Air Melebihi Batas Ideal',
+                desc: 'Suhu tandon nutrisi terdeteksi 29.4°C (batas normal 20.0°C – 28.0°C). Sirkulasi nutrisi disarankan aktif.',
+                value: 'Suhu Air: 29.4°C · pH: 6.20 · EC: 1.65 mS/cm'
+            },
+            {
+                id: 'dummy-sensor-normal-tefa',
+                ts: Date.now() - 1000 * 60 * 12,
+                type: 'normal',
+                tag: 'Kondisi Ideal',
+                time: formatNowWibTime(),
+                title: 'Semua Parameter Sensor Normal',
+                desc: 'Tingkat keasaman dan kepekatan larutan nutrisi hidroponik berada dalam rentang ideal.',
+                value: 'pH: 6.15 · EC: 1.45 mS/cm · Suhu: 24.5°C'
+            }
+        ];
 
         function getNotifClearedAt() {
             try {
@@ -2658,6 +2802,14 @@
                 clearAllBtn.disabled = notifications.length === 0;
             }
         }
+
+        var deletedSet = getDeletedNotifSet();
+        var activeDummies = dummyInitialNotifs.filter(function (n) { return !deletedSet[n.id]; });
+        if (activeDummies.length === 0) {
+            activeDummies = dummyInitialNotifs.slice();
+        }
+        notifications = activeDummies;
+        unreadCount = notifications.filter(function (n) { return n.type === 'warning'; }).length;
 
         var badgeEl = notifBtn.querySelector('.notif-badge');
         if (!badgeEl) {
@@ -2777,14 +2929,7 @@
                     testNotifLabel.textContent = 'Tunggu ' + remainingSec + 'd...';
                 }
 
-                var usedNativeSchedule = !!(window.AndroidBridge && typeof window.AndroidBridge.scheduleTestNotification === 'function');
-                if (usedNativeSchedule) {
-                    try {
-                        window.AndroidBridge.scheduleTestNotification(3000);
-                    } catch (err) {
-                        usedNativeSchedule = false;
-                    }
-                } else if (typeof window.Notification !== 'undefined' && window.Notification.permission === 'default' && typeof window.Notification.requestPermission === 'function') {
+                if (typeof window.Notification !== 'undefined' && window.Notification.permission === 'default' && typeof window.Notification.requestPermission === 'function') {
                     try {
                         var permPromise = window.Notification.requestPermission();
                         if (permPromise && typeof permPromise.catch === 'function') {
@@ -2808,7 +2953,7 @@
                         id: nowTs + '|warning|test-notif',
                         ts: nowTs,
                         type: 'warning',
-                        tag: 'TEST NOTIF',
+                        tag: 'Uji Sistem',
                         time: timeText,
                         title: 'Test Notifikasi TeFa Greenhouse',
                         desc: 'Notifikasi uji berhasil dikirim setelah jeda 3 detik.',
@@ -2819,19 +2964,38 @@
                     if (notifications.length > 50) notifications.pop();
                     updateClearAllBtnState();
 
+                    // 1. Putar alert chime audio melodik
+                    playNotificationChime();
+
+                    // 2. Tampilkan floating in-app banner toast di web
+                    showWebNotificationToast(testItem);
+
+                    // 3. Update counter badge & daftar modal
                     if (!backdrop.classList.contains('open')) {
                         unreadCount++;
                         updateBadge();
                     } else {
+                        if (currentFilter === 'normal') {
+                            currentFilter = 'all';
+                            tabBtns.forEach(function (b) {
+                                b.classList.toggle('active', b.getAttribute('data-filter') === 'all');
+                            });
+                        }
                         currentNotifPage = 1;
                         renderList();
                     }
 
-                    if (!usedNativeSchedule && typeof window.Notification !== 'undefined' && window.Notification.permission === 'granted') {
+                    // 4. Kirim desktop notification jika izin tersedia
+                    if (typeof window.Notification !== 'undefined' && window.Notification.permission === 'granted') {
                         try {
-                            new window.Notification(testItem.title, {
-                                body: testItem.desc + '\n' + testItem.value + ' (' + timeText + ')'
+                            var desktopNotif = new window.Notification(testItem.title, {
+                                body: testItem.desc + '\n' + testItem.value + ' (' + timeText + ')',
+                                icon: 'img/school_logo.png'
                             });
+                            desktopNotif.onclick = function () {
+                                window.focus();
+                                openModal();
+                            };
                         } catch (err) { }
                     }
 
@@ -2842,13 +3006,15 @@
                     }
 
                     setTimeout(function () {
-                        testNotifBtn.classList.remove('is-sent');
-                        testNotifBtn.disabled = false;
+                        if (testNotifBtn) {
+                            testNotifBtn.classList.remove('is-sent');
+                            testNotifBtn.disabled = false;
+                        }
                         if (testNotifLabel) {
                             testNotifLabel.textContent = 'Test Notif (3d)';
                         }
                         isTestCountdownActive = false;
-                    }, 1200);
+                    }, 1400);
                 }, 3000);
             });
         }
@@ -2870,34 +3036,9 @@
                 tabBtns.forEach(function (b) { b.classList.remove('active'); });
                 btn.classList.add('active');
                 currentFilter = btn.getAttribute('data-filter') || 'all';
-                currentNotifPage = 1;
                 renderList();
             });
         });
-
-        if (notifPrevBtn) {
-            notifPrevBtn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                if (currentNotifPage > 1) {
-                    currentNotifPage--;
-                    renderList();
-                }
-            });
-        }
-
-        if (notifNextBtn) {
-            notifNextBtn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                var filtered = notifications.filter(function (item) {
-                    return currentFilter === 'all' || item.type === currentFilter;
-                });
-                var totalPages = Math.ceil(filtered.length / notifsPerPage) || 1;
-                if (currentNotifPage < totalPages) {
-                    currentNotifPage++;
-                    renderList();
-                }
-            });
-        }
 
         if (listContainer) {
             listContainer.addEventListener('click', function (e) {
@@ -2930,6 +3071,54 @@
             });
         }
 
+        function sanitizeText(str) {
+            return String(str == null ? '' : str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function renderNotifMetrics(item) {
+            if (!item || !item.value) return '';
+            var raw = String(item.value).trim();
+            var parts = raw.split(/\s*·\s*|\s*;\s*/);
+            var hasColon = parts.some(function (p) { return p.indexOf(':') !== -1; });
+            if (!hasColon) {
+                return '<div class="notif-card-metrics"><div class="notif-metric-chip"><span class="notif-chip-val">' + sanitizeText(raw) + '</span></div></div>';
+            }
+
+            var chipsHtml = '<div class="notif-card-metrics">';
+            parts.forEach(function (part) {
+                var colonIdx = part.indexOf(':');
+                if (colonIdx !== -1) {
+                    var lbl = part.substring(0, colonIdx).trim();
+                    var val = part.substring(colonIdx + 1).trim();
+                    var isAlertMetric = false;
+                    if (item.type === 'warning') {
+                        var checkContext = ((item.title || '') + ' ' + (item.desc || '')).toLowerCase();
+                        var lblLower = lbl.toLowerCase();
+                        if ((lblLower.indexOf('suhu') !== -1 && checkContext.indexOf('suhu') !== -1) ||
+                            (lblLower.indexOf('ph') !== -1 && checkContext.indexOf('ph') !== -1) ||
+                            (lblLower.indexOf('ec') !== -1 && checkContext.indexOf('ec') !== -1) ||
+                            (lblLower.indexOf('kelembapan') !== -1 && checkContext.indexOf('kelembapan') !== -1) ||
+                            (lblLower.indexOf('rh') !== -1 && checkContext.indexOf('kelembapan') !== -1)) {
+                            isAlertMetric = true;
+                        }
+                    }
+                    var chipCls = isAlertMetric ? 'notif-metric-chip is-alert' : 'notif-metric-chip';
+                    chipsHtml += '<div class="' + chipCls + '">' +
+                        '<span class="notif-chip-label">' + sanitizeText(lbl) + '</span>' +
+                        '<span class="notif-chip-val">' + sanitizeText(val) + (isAlertMetric ? ' <span class="notif-chip-indicator" aria-hidden="true">↑</span>' : '') + '</span>' +
+                        '</div>';
+                } else if (part.trim()) {
+                    chipsHtml += '<div class="notif-metric-chip"><span class="notif-chip-val">' + sanitizeText(part.trim()) + '</span></div>';
+                }
+            });
+            chipsHtml += '</div>';
+            return chipsHtml;
+        }
+
         function renderList() {
             updateClearAllBtnState();
             if (!listContainer) return;
@@ -2939,48 +3128,37 @@
             });
 
             var total = filtered.length;
-            var totalPages = Math.ceil(total / notifsPerPage) || 1;
-            if (currentNotifPage > totalPages) currentNotifPage = totalPages;
-            if (currentNotifPage < 1) currentNotifPage = 1;
-
-            if (notifPaginationInfo) {
-                notifPaginationInfo.textContent = 'Halaman ' + currentNotifPage + ' dari ' + totalPages + ' (' + total + ' notifikasi)';
-            }
-            if (notifPrevBtn) notifPrevBtn.disabled = currentNotifPage === 1;
-            if (notifNextBtn) notifNextBtn.disabled = currentNotifPage === totalPages || total === 0;
-
             if (total === 0) {
                 listContainer.innerHTML = '<div class="notif-empty"><div class="notif-empty-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></div><div class="notif-empty-title">Tidak Ada Notifikasi</div><div class="notif-empty-desc">Saat ini tidak ada pemberitahuan atau peringatan baru dari sensor.</div></div>';
-                if (notifPagination) notifPagination.style.display = 'none';
                 return;
             }
-            if (notifPagination) notifPagination.style.display = 'flex';
-
-            var start = (currentNotifPage - 1) * notifsPerPage;
-            var end = Math.min(start + notifsPerPage, total);
-            var slice = filtered.slice(start, end);
 
             var html = '';
-            slice.forEach(function (item, idx) {
-                ensureNotifItemIdentity(item, start + idx);
-                var cardCls = item.type === 'warning' ? ' is-warning' : ' is-normal';
+            filtered.forEach(function (item, idx) {
+                ensureNotifItemIdentity(item, idx);
+                var isWarn = item.type === 'warning';
+                var cardCls = isWarn ? ' is-warning' : ' is-normal';
+                var rawTag = (item.tag || (isWarn ? 'Suhu Tandon' : 'Sensor Normal'))
+                    .replace(/^PERINGATAN\s*/i, '')
+                    .trim();
+                if (!rawTag) rawTag = (isWarn ? 'Peringatan Sensor' : 'Sensor Normal');
+
                 html += [
                     '<div class="notif-card' + cardCls + '">',
                     '  <div class="notif-card-header">',
-                    '    <span class="notif-card-tag">' + item.tag + '</span>',
                     '    <div class="notif-card-meta">',
-                    '      <span class="notif-card-time">' + item.time + '</span>',
-                    '      <button type="button" class="notif-card-delete" data-notif-id="' + encodeURIComponent(item.id) + '" title="Hapus Notifikasi" aria-label="Hapus Notifikasi">',
-                    '        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><line x1="3" y1="3" x2="11" y2="11" /><line x1="11" y1="3" x2="3" y2="11" /></svg>',
-                    '      </button>',
+                    '      <span class="notif-card-app-name">' + sanitizeText(rawTag) + '</span>',
+                    '      <span class="notif-card-time">' + sanitizeText(item.time || '') + '</span>',
                     '    </div>',
+                    '    <button type="button" class="notif-card-delete" data-notif-id="' + encodeURIComponent(item.id) + '" title="Tutup Notifikasi" aria-label="Tutup Notifikasi">',
+                    '      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="3.5" y1="3.5" x2="10.5" y2="10.5" /><line x1="10.5" y1="3.5" x2="3.5" y2="10.5" /></svg>',
+                    '    </button>',
                     '  </div>',
-                    '  <h4 class="notif-card-title">' + item.title + '</h4>',
-                    '  <p class="notif-card-desc">' + item.desc + '</p>',
-                    '  <div class="notif-card-divider"></div>',
-                    '  <div class="notif-card-footer">',
-                    '    <span class="notif-card-value">' + item.value + '</span>',
+                    '  <div class="notif-card-body">',
+                    '    <h4 class="notif-card-title">' + sanitizeText(item.title || 'Notifikasi Sensor') + '</h4>',
+                    (item.desc ? '    <p class="notif-card-desc">' + sanitizeText(item.desc) + '</p>' : ''),
                     '  </div>',
+                    renderNotifMetrics(item),
                     '</div>'
                 ].join('');
             });
@@ -3003,6 +3181,9 @@
             if (backdrop.classList.contains('open')) {
                 currentNotifPage = 1;
                 renderList();
+            } else if (!isRunningInApk && item.type === 'warning') {
+                playNotificationChime();
+                showWebNotificationToast(item);
             }
             if (window.AndroidBridge && typeof window.AndroidBridge.postNotification === 'function') {
                 try {
@@ -3033,18 +3214,43 @@
                     if (nextList.length >= 50) break;
                 }
             }
+            if (nextList.length === 0) {
+                var activeDummies = dummyInitialNotifs.filter(function (n) { return !deletedSet[n.id]; });
+                if (activeDummies.length === 0) activeDummies = dummyInitialNotifs.slice();
+                nextList = activeDummies.slice();
+            }
             notifications = nextList;
             updateClearAllBtnState();
             if (!backdrop.classList.contains('open')) {
                 unreadCount = notifications.filter(function (n) { return n.type === 'warning'; }).length;
                 updateBadge();
             } else {
-                currentNotifPage = 1;
                 renderList();
             }
         };
 
         updateClearAllBtnState();
+        updateBadge();
+
+        if (notifications.length > 0) {
+            setTimeout(function () {
+                var warnItem = notifications.filter(function (n) { return n.type === 'warning'; })[0] || notifications[0];
+                if (warnItem && window.AndroidBridge && typeof window.AndroidBridge.postNotification === 'function') {
+                    try {
+                        window.AndroidBridge.postNotification(
+                            warnItem.title,
+                            warnItem.desc,
+                            warnItem.value,
+                            warnItem.type === 'warning',
+                            warnItem.time
+                        );
+                    } catch (e) { }
+                } else if (warnItem && !isRunningInApk && !backdrop.classList.contains('open')) {
+                    playNotificationChime();
+                    showWebNotificationToast(warnItem);
+                }
+            }, 1200);
+        }
     }
 
     function initAllWidgets() {

@@ -1351,7 +1351,7 @@
                 id: stableId,
                 ts: numericTs,
                 type: 'warning',
-                tag: 'PERINGATAN',
+                tag: issues.length > 0 ? issues.join(' & ') : 'Parameter Kritis',
                 time: timeText,
                 title: issues.length > 0
                     ? ('Peringatan: ' + issues.join(' & ') + ' di luar batas aman')
@@ -1367,7 +1367,7 @@
             id: stableId,
             ts: numericTs,
             type: 'normal',
-            tag: 'NORMAL',
+            tag: 'Parameter Normal',
             time: timeText,
             title: 'Kondisi Sensor Normal',
             desc: 'Semua parameter berada dalam batas ambang aman.',

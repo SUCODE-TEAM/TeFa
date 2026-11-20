@@ -1,14 +1,14 @@
-#Thu Nov 19 09:55:27 WIB 2026
-base.0=D\:\\Isro\\TeFa\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeExtDexDebug\\classes.dex
-base.1=D\:\\Isro\\TeFa\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\0\\classes.dex
-base.2=D\:\\Isro\\TeFa\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\10\\classes.dex
-base.3=D\:\\Isro\\TeFa\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\15\\classes.dex
-base.4=D\:\\Isro\\TeFa\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\2\\classes.dex
-base.5=D\:\\Isro\\TeFa\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\5\\classes.dex
-base.6=D\:\\Isro\\TeFa\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\7\\classes.dex
-base.7=D\:\\Isro\\TeFa\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\8\\classes.dex
-base.8=D\:\\Isro\\TeFa\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\9\\classes.dex
-base.9=D\:\\Isro\\TeFa\\APKAndro\\app\\build\\intermediates\\global_synthetics_dex\\debug\\generateDebugGlobalSynthetics\\classes.dex
+#Fri Nov 20 11:37:23 WIB 2026
+base.0=M\:\\coding\\TEFA-combine\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeExtDexDebug\\classes.dex
+base.1=M\:\\coding\\TEFA-combine\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\0\\classes.dex
+base.2=M\:\\coding\\TEFA-combine\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\10\\classes.dex
+base.3=M\:\\coding\\TEFA-combine\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\15\\classes.dex
+base.4=M\:\\coding\\TEFA-combine\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\2\\classes.dex
+base.5=M\:\\coding\\TEFA-combine\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\5\\classes.dex
+base.6=M\:\\coding\\TEFA-combine\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\7\\classes.dex
+base.7=M\:\\coding\\TEFA-combine\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\8\\classes.dex
+base.8=M\:\\coding\\TEFA-combine\\APKAndro\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\9\\classes.dex
+base.9=M\:\\coding\\TEFA-combine\\APKAndro\\app\\build\\intermediates\\global_synthetics_dex\\debug\\generateDebugGlobalSynthetics\\classes.dex
 path.0=classes.dex
 path.1=0/classes.dex
 path.2=10/classes.dex
