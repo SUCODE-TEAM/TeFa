@@ -1132,7 +1132,7 @@
         // 7. Tambah ke Tabel History Sensor (#hist) & Notifikasi Sensor
         if (typeof window.addSensorHistoryRow === 'function') {
             window.addSensorHistoryRow({
-                time: wibTime,
+                time: formatDisplayTimeWithDate(effectiveIso),
                 ph: ph ? ph.value.toFixed(2) : 'N/A',
                 ppm: ec ? (ec.value.toFixed(2) + ' mS/cm') : 'N/A',
                 temp: waterTemp ? waterTemp.value.toFixed(1) : 'N/A',
@@ -1334,10 +1334,8 @@
     function formatDisplayTimeWithDate(isoString) {
         var d = isoString ? new Date(isoString) : new Date();
         if (isNaN(d.getTime())) return '--:--:--';
-        var now = new Date();
-        var isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
         var t = formatWibTime(isoString);
-        return isToday ? t : (formatShortDate(d.getTime()) + ' ' + t);
+        return formatShortDate(d.getTime()) + ' ' + t;
     }
 
     function buildSensorNotificationItem(phVal, ecVal, wtVal, humVal, thr, timeText, forceWarn, tsMs) {
