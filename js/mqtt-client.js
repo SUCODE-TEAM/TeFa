@@ -217,7 +217,7 @@
         }
 
         var filtered = telemetryLog.filter(function (p) {
-            return p.ts >= (latestTs - windowMs);
+            return p.ts >= (latestTs - windowMs) && p.ts <= (latestTs + 60 * 1000);
         });
         if (filtered.length === 0) filtered = telemetryLog.slice(-20);
 
@@ -235,7 +235,21 @@
             return { points: rawPts, label: desc + ' · ' + rawPts.length + ' titik' };
         }
 
-        var span = Math.max(1, filtered[filtered.length - 1].ts - filtered[0].ts);
+        var span = Math.max(0, filtered[filtered.length - 1].ts - filtered[0].ts);
+        if (span <= 1000 && filtered.length > 1) {
+            var fallbackPts = filtered.slice(-20).map(function (p) {
+                return {
+                    ts: p.ts,
+                    time: p.time || formatClock(p.ts, true),
+                    axisLabel: p.time || formatClock(p.ts, true),
+                    ph: p.ph,
+                    ec: p.ec,
+                    waterTemp: p.waterTemp
+                };
+            });
+            return { points: fallbackPts, label: desc + ' · ' + fallbackPts.length + ' titik' };
+        }
+        span = Math.max(1, span);
         var bucketMs = 60 * 1000;
 
         if (rangeKey === '24J') {
@@ -538,6 +552,17 @@
         }, { passive: true });
         chartBox.addEventListener('mouseleave', hideHover);
         chartBox.addEventListener('touchend', hideHover);
+    }
+
+    function resolveReliableTimestamp(rawTimestamp) {
+        var now = Date.now();
+        if (rawTimestamp) {
+            var parsed = new Date(rawTimestamp);
+            if (!isNaN(parsed.getTime()) && Math.abs(now - parsed.getTime()) <= 5 * 60 * 1000) {
+                return parsed;
+            }
+        }
+        return new Date(now);
     }
 
     function formatWibTime(isoString) {
@@ -891,7 +916,9 @@
         if (!airHum) airHum = pickSensorValue(sensorMap, ['004aht20_hum'], '%');
 
         var thr = getThresholds();
-        var wibTime = formatWibTime(payload.timestamp);
+        var effectiveDate = resolveReliableTimestamp(payload.timestamp);
+        var effectiveIso = effectiveDate.toISOString();
+        var wibTime = formatWibTime(effectiveIso);
 
         // Evaluasi status Normal / Warning
         var isPhWarn = ph && (ph.value < thr.phMin || ph.value > thr.phMax);
@@ -1082,8 +1109,7 @@
         }
 
         // 6. Update Telemetry Chart & Log
-        var parsedPayloadTs = payload.timestamp ? new Date(payload.timestamp).getTime() : NaN;
-        var entryTs = !isNaN(parsedPayloadTs) ? parsedPayloadTs : Date.now();
+        var entryTs = effectiveDate.getTime();
         var logEntry = {
             ts: entryTs,
             time: wibTime,
@@ -1254,7 +1280,7 @@
 
     function fetchSupabaseRows(table, limit) {
         if (typeof fetch !== 'function' || !SUPABASE_CONFIG.anonKey) return Promise.resolve(null);
-        var url = SUPABASE_CONFIG.url + '/' + table + '?select=*&order=waktu.desc&limit=' + (limit || 200);
+        var url = SUPABASE_CONFIG.url + '/' + table + '?select=*&order=id.desc&limit=' + (limit || 200);
         return fetch(url, {
             method: 'GET',
             headers: {
@@ -1275,8 +1301,7 @@
     }
 
     function saveTelemetryToSupabase(payload, ph, ec, waterTemp, light, airTemp, airHum) {
-        var d = payload && payload.timestamp ? new Date(payload.timestamp) : new Date();
-        if (isNaN(d.getTime())) d = new Date();
+        var d = resolveReliableTimestamp(payload && payload.timestamp);
         var isoTime = d.toISOString();
 
         if (ph || ec || waterTemp || light || airHum) {
@@ -1401,9 +1426,9 @@
             var thr = getThresholds();
 
             var thrSig = [thr.phMin, thr.phMax, thr.ecMin, thr.ecMax, thr.tempMin, thr.tempMax, thr.humMin, thr.humMax].join(',');
-            var firstSensor = sensorRows[0] ? (sensorRows[0].waktu + '|' + sensorRows[0].PH + '|' + sensorRows[0].PPM) : '';
-            var lastSensor = sensorRows.length > 1 ? (sensorRows[sensorRows.length - 1].waktu || '') : '';
-            var firstAws = awsRows[0] ? (awsRows[0].waktu + '|' + awsRows[0].temperatur + '|' + awsRows[0].radiasi) : '';
+            var firstSensor = sensorRows[0] ? ((sensorRows[0].id || '') + '|' + sensorRows[0].waktu + '|' + sensorRows[0].PH + '|' + sensorRows[0].PPM) : '';
+            var lastSensor = sensorRows.length > 1 ? ((sensorRows[sensorRows.length - 1].id || '') + '|' + (sensorRows[sensorRows.length - 1].waktu || '')) : '';
+            var firstAws = awsRows[0] ? ((awsRows[0].id || '') + '|' + awsRows[0].waktu + '|' + awsRows[0].temperatur + '|' + awsRows[0].radiasi) : '';
             var fp = sensorOk + ':' + sensorRows.length + ':' + firstSensor + ':' + lastSensor + '|' + awsOk + ':' + awsRows.length + ':' + firstAws + '|' + thrSig;
             if (fp === lastSupabaseFingerprint) {
                 return;
@@ -1531,7 +1556,7 @@
             }
 
             if (sensorOk) {
-                var cappedRows = sensorRows.slice(0, 600);
+                var cappedRows = sensorRows.slice(0, 600).reverse();
                 telemetryLog = cappedRows.map(function (r) {
                     var ts = r.waktu ? new Date(r.waktu).getTime() : Date.now();
                     if (isNaN(ts)) ts = Date.now();
@@ -1545,8 +1570,6 @@
                         airHum: null,
                         light: toSensorNumber(r.cahaya) || 0
                     };
-                }).sort(function (a, b) {
-                    return a.ts - b.ts;
                 });
                 saveTelemetryLog();
                 renderTelemetryChart();
@@ -1734,7 +1757,7 @@
         lastDeviceStatus = payload;
 
         var uptimeEl = document.getElementById('uptime');
-        if (uptimeEl) uptimeEl.textContent = formatWibTime(payload.timestamp) + ' WIB';
+        if (uptimeEl) uptimeEl.textContent = formatWibTime(resolveReliableTimestamp(payload.timestamp).toISOString()) + ' WIB';
 
         var hwItems = document.querySelectorAll('.hero .hw > div');
         if (hwItems.length > 0) {
