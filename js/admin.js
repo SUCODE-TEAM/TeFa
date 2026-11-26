@@ -108,6 +108,12 @@
         var ecParsed = parseFloat(String(s.ecTarget !== undefined ? s.ecTarget : '1.5').replace(',', '.'));
         var phMinParsed = parseFloat(String(s.phMin !== undefined ? s.phMin : '5.5').replace(',', '.'));
         var phMaxParsed = parseFloat(String(s.phMax !== undefined ? s.phMax : '6.5').replace(',', '.'));
+        var ecMinParsed = parseFloat(String(s.ecMin !== undefined ? s.ecMin : '1.0').replace(',', '.'));
+        var ecMaxParsed = parseFloat(String(s.ecMax !== undefined ? s.ecMax : '2.5').replace(',', '.'));
+        var tempMinParsed = parseFloat(String(s.tempMin !== undefined ? s.tempMin : '20').replace(',', '.'));
+        var tempMaxParsed = parseFloat(String(s.tempMax !== undefined ? s.tempMax : '30').replace(',', '.'));
+        var humMinParsed = parseFloat(String(s.humMin !== undefined ? s.humMin : '50').replace(',', '.'));
+        var humMaxParsed = parseFloat(String(s.humMax !== undefined ? s.humMax : '85').replace(',', '.'));
         var upDoseParsed = parseFloat(s.phUpDose);
         var downDoseParsed = parseFloat(s.phDownDose);
         var intervalParsed = parseInt(s.intervalMinutes, 10);
@@ -125,6 +131,12 @@
                 ph_min: isNaN(phMinParsed) ? 5.5 : phMinParsed,
                 ph_max: isNaN(phMaxParsed) ? 6.5 : phMaxParsed,
                 ec_target: isNaN(ecParsed) ? 1.5 : ecParsed,
+                ec_min: isNaN(ecMinParsed) ? 1.0 : ecMinParsed,
+                ec_max: isNaN(ecMaxParsed) ? 2.5 : ecMaxParsed,
+                temp_min: isNaN(tempMinParsed) ? 20 : tempMinParsed,
+                temp_max: isNaN(tempMaxParsed) ? 30 : tempMaxParsed,
+                hum_min: isNaN(humMinParsed) ? 50 : humMinParsed,
+                hum_max: isNaN(humMaxParsed) ? 85 : humMaxParsed,
                 ph_up_dose_sec: isNaN(upDoseParsed) ? 0 : upDoseParsed,
                 ph_down_dose_sec: isNaN(downDoseParsed) ? 0 : downDoseParsed
             }
@@ -733,6 +745,10 @@
         gearBtn.addEventListener('click', function (e) {
             e.stopPropagation();
             openModal();
+        });
+
+        window.addEventListener('tefa:control-settings-sync', function () {
+            loadSettings();
         });
 
         if (closeBtn) {

@@ -389,6 +389,10 @@
             openModal();
         });
 
+        window.addEventListener('tefa:control-settings-sync', function () {
+            loadSettings();
+        });
+
         if (closeBtn) {
             closeBtn.addEventListener('click', function (e) {
                 e.stopPropagation();

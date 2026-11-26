@@ -1780,6 +1780,51 @@
         }
     }
 
+    function applyControlSettingsFromMqtt(data) {
+        if (!data || typeof data !== 'object') return;
+        try {
+            var saved = JSON.parse(localStorage.getItem('tefa_dashboard_settings') || '{}') || {};
+            var prevThrSig = [saved.phMin, saved.phMax, saved.ecMin, saved.ecMax, saved.tempMin, saved.tempMax, saved.humMin, saved.humMax].join(',');
+
+            if (data.interval_minutes !== undefined && data.interval_minutes !== null && !isNaN(Number(data.interval_minutes))) {
+                saved.intervalMinutes = String(data.interval_minutes);
+            }
+
+            if (data.threshold && typeof data.threshold === 'object') {
+                var t = data.threshold;
+                if (t.ph_min !== undefined && t.ph_min !== null && !isNaN(Number(t.ph_min))) saved.phMin = String(t.ph_min);
+                if (t.ph_max !== undefined && t.ph_max !== null && !isNaN(Number(t.ph_max))) saved.phMax = String(t.ph_max);
+                if (t.ec_target !== undefined && t.ec_target !== null && !isNaN(Number(t.ec_target))) saved.ecTarget = String(t.ec_target);
+                if (t.ph_up_dose_sec !== undefined && t.ph_up_dose_sec !== null && !isNaN(Number(t.ph_up_dose_sec))) saved.phUpDose = String(t.ph_up_dose_sec);
+                if (t.ph_down_dose_sec !== undefined && t.ph_down_dose_sec !== null && !isNaN(Number(t.ph_down_dose_sec))) saved.phDownDose = String(t.ph_down_dose_sec);
+                if (t.ec_min !== undefined && t.ec_min !== null && !isNaN(Number(t.ec_min))) saved.ecMin = String(t.ec_min);
+                if (t.ec_max !== undefined && t.ec_max !== null && !isNaN(Number(t.ec_max))) saved.ecMax = String(t.ec_max);
+                if (t.temp_min !== undefined && t.temp_min !== null && !isNaN(Number(t.temp_min))) saved.tempMin = String(t.temp_min);
+                if (t.temp_max !== undefined && t.temp_max !== null && !isNaN(Number(t.temp_max))) saved.tempMax = String(t.temp_max);
+                if (t.hum_min !== undefined && t.hum_min !== null && !isNaN(Number(t.hum_min))) saved.humMin = String(t.hum_min);
+                if (t.hum_max !== undefined && t.hum_max !== null && !isNaN(Number(t.hum_max))) saved.humMax = String(t.hum_max);
+            }
+
+            if (data.pumps && typeof data.pumps === 'object') {
+                ['pump_A', 'pump_B', 'pump_up', 'pump_down', 'pump_big'].forEach(function (k) {
+                    if (data.pumps[k] !== undefined && data.pumps[k] !== null) {
+                        saved[k] = String(data.pumps[k]).toLowerCase() === 'on' ? 'on' : 'off';
+                    }
+                });
+            }
+
+            localStorage.setItem('tefa_dashboard_settings', JSON.stringify(saved));
+            window.dispatchEvent(new CustomEvent('tefa:control-settings-sync', { detail: saved }));
+
+            var nextThrSig = [saved.phMin, saved.phMax, saved.ecMin, saved.ecMax, saved.tempMin, saved.tempMax, saved.humMin, saved.humMax].join(',');
+            if (nextThrSig !== prevThrSig) {
+                refreshHistoryFromSupabase(true);
+            }
+        } catch (e) {
+            console.warn('[TeFa MQTT] Gagal sinkronisasi setting dari control JSON:', e);
+        }
+    }
+
     function initMqttClient() {
         if (typeof mqtt === 'undefined') {
             console.warn('[TeFa MQTT] Library mqtt.min.js belum termuat.');
@@ -1808,7 +1853,7 @@
             console.log('[TeFa MQTT] Terhubung ke ' + MQTT_CONFIG.brokerUrl + '! Mendaftarkan subscriptions...');
             setConnectionUI('Online', 'Menunggu data...', true);
 
-            var topics = [MQTT_CONFIG.topic, MQTT_CONFIG.statusTopic].filter(Boolean);
+            var topics = [MQTT_CONFIG.topic, MQTT_CONFIG.statusTopic, MQTT_CONFIG.publishTopic].filter(Boolean);
             var seen = {};
             topics.forEach(function (top) {
                 if (seen[top]) return;
@@ -1831,7 +1876,18 @@
 
         client.on('message', function (topic, message, packet) {
             try {
-                // Abaikan pesan retained lama dari broker agar tidak muncul saat sensor mati
+                // Topik control memakai retained message agar setting terbaru (pH min/max, EC, dll.)
+                // otomatis tersinkron di semua web & HP yang baru dibuka
+                if (topic === MQTT_CONFIG.publishTopic) {
+                    var ctrlRaw = message.toString();
+                    if (!ctrlRaw) return;
+                    var ctrlData = JSON.parse(ctrlRaw);
+                    console.log('[TeFa MQTT] Setting control tersinkron dari [' + topic + ']:', ctrlData);
+                    applyControlSettingsFromMqtt(ctrlData);
+                    return;
+                }
+
+                // Abaikan pesan retained lama dari broker untuk sensor/status agar tidak muncul saat sensor mati
                 if (packet && packet.retain) {
                     console.log('[TeFa MQTT] Mengabaikan pesan retained lama dari [' + topic + ']');
                     return;
@@ -1915,6 +1971,7 @@
 
         var prevBroker = MQTT_CONFIG.brokerUrl;
         var prevSub = MQTT_CONFIG.topic;
+        var prevPub = MQTT_CONFIG.publishTopic;
         var prevStatus = MQTT_CONFIG.statusTopic;
 
         MQTT_CONFIG.brokerUrl = nextBroker;
@@ -1958,6 +2015,24 @@
                                 console.error('[TeFa MQTT] Gagal subscribe ke topik status baru:', err);
                             } else {
                                 console.log('[TeFa MQTT] Topik status diganti ke ' + nextStatus);
+                            }
+                        });
+                    }
+                } catch (e) {
+                    initMqttClient();
+                }
+            }
+            if (prevPub !== nextPub) {
+                try {
+                    if (prevPub && prevPub !== nextSub && prevPub !== nextStatus && typeof window.tefaMqttClient.unsubscribe === 'function') {
+                        window.tefaMqttClient.unsubscribe(prevPub);
+                    }
+                    if (nextPub && nextPub !== nextSub && nextPub !== nextStatus) {
+                        window.tefaMqttClient.subscribe(nextPub, { qos: 0 }, function (err) {
+                            if (err) {
+                                console.error('[TeFa MQTT] Gagal subscribe ke topik control baru:', err);
+                            } else {
+                                console.log('[TeFa MQTT] Topik control diganti ke ' + nextPub);
                             }
                         });
                     }
